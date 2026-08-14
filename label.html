@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meidin Workspace - Estimator Bordir</title>
+
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f4f6f8; margin: 0; padding: 12px; color: #333; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        h2 { margin: 0 0 12px 0; font-size: 1.15rem; color: #1a252f; text-align: center; }
+        
+        .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #ffffff; }
+        .card-title { font-weight: bold; font-size: 0.85rem; margin-bottom: 8px; color: #4a5568; display: flex; justify-content: space-between; align-items: center; }
+        
+        .form-group { margin-bottom: 8px; }
+        label { display: block; font-size: 0.75rem; margin-bottom: 4px; color: #718096; font-weight: 600; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.85rem; }
+        
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .btn { padding: 10px; border: none; border-radius: 6px; font-weight: bold; font-size: 0.8rem; cursor: pointer; text-align: center; color: white; transition: background 0.2s; }
+        .btn-blue { background-color: #3182ce; }
+        .btn-gray { background-color: #718096; }
+        .btn-green { background-color: #38a169; }
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; }
+        .btn-danger { background-color: #e53e3e; }
+        
+        /* Area Canvas Preview */
+        #preview-container { position: relative; width: 100%; border: 1px solid #cbd5e0; border-radius: 8px; overflow: hidden; background: #2d3748; text-align: center; margin-bottom: 12px; }
+        #preview-img { width: 100%; height: auto; display: block; }
+        
+        /* Dynamic Table styling */
+        .jarum-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.8rem; }
+        .jarum-table th { background: #edf2f7; padding: 6px; text-align: center; color: #4a5568; font-size: 0.75rem; }
+        .jarum-table td { border-bottom: 1px solid #edf2f7; padding: 6px; text-align: center; }
+        .jarum-table input { padding: 4px; font-size: 0.8rem; text-align: center; }
+        
+        .total-box { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 0.9rem; }
+        .total-value { color: #2b6cb0; font-size: 1rem; }
+    </style>
+
+    <!-- Library Excel & Canvas PNG -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    
+    <!-- Capacitor Bridge -->
+    <script src="capacitor.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <h2>Meidin Workspace</h2>
+
+    <!-- Preview Area Gambar -->
+    <div id="preview-container">
+        <img id="preview-img" src="https://via.placeholder.com/400x300.png?text=Preview+Gambar+Bordir" alt="Preview Gambar">
+    </div>
+
+    <!-- Data Proyek -->
+    <div class="card">
+        <div class="card-title">Proyek & Data Utilitas</div>
+        <div class="form-group">
+            <label for="namaEstimasi">Nama Estimasi</label>
+            <input type="text" id="namaEstimasi" value="Logo Baju" placeholder="Contoh: Logo Baju">
+        </div>
+        <div class="btn-grid">
+            <button class="btn btn-blue" onclick="simpanJSON()">Simpan JSON</button>
+            <button class="btn btn-gray" onclick="muatJSON()">Muat JSON</button>
+        </div>
+    </div>
+
+    <!-- Table List Jarum & Hitungan Pick -->
+    <div class="card">
+        <div class="card-title">
+            <span>List Jarum</span>
+            <button class="btn btn-blue btn-sm" onclick="tambahJarum()">+ Jarum</button>
+        </div>
+        
+        <table class="jarum-table" id="tableJarum">
+            <thead>
+                <tr>
+                    <th>Jarum</th>
+                    <th>Panjang (cm)</th>
+                    <th>Stitch Count</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="jarumBody">
+                <!-- Row dinamis di-generate JS -->
+            </tbody>
+        </table>
+
+        <div class="total-box">
+            <span>Total Pick:</span>
+            <span class="total-value" id="totalPickDisplay">0</span>
+        </div>
+    </div>
+
+    <!-- Action Buttons Export -->
+    <div class="btn-grid">
+        <button class="btn btn-green" onclick="exportExcel()">Export Excel (.xlsx)</button>
+        <button class="btn btn-green" onclick="exportPNG()">Export PNG</button>
+    </div>
+</div>
+
+<script>
+    // State data awal jarum
+    let jarumList = [
+        { id: "J0", length: 2.52, stitches: 106 },
+        { id: "J1", length: 2.51, stitches: 105 },
+        { id: "J2", length: 2.54, stitches: 107 },
+        { id: "J3", length: 2.18, stitches: 91 }
+    ];
+
+    // Inisialisasi Tampilan
+    document.addEventListener("DOMContentLoaded", () => {
+        renderJarumTable();
+    });
+
+    // 1. Render Tabel dan Hitung Total Pick Dinamis
+    function renderJarumTable() {
+        const tbody = document.getElementById("jarumBody");
+        tbody.innerHTML = "";
+        let totalPick = 0;
+
+        jarumList.forEach((item, index) => {
+            totalPick += parseInt(item.stitches) || 0;
+            
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td><strong>${item.id}</strong></td>
+                <td><input type="number" step="0.01" value="${item.length}" onchange="updateJarum(${index}, 'length', this.value)"></td>
+                <td><input type="number" value="${item.stitches}" onchange="updateJarum(${index}, 'stitches', this.value)"></td>
+                <td><button class="btn btn-danger btn-sm" onclick="hapusJarum(${index})">✕</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById("totalPickDisplay").innerText = totalPick;
+    }
+
+    // Update Nilai Jarum & Recalculate
+    function updateJarum(index, field, value) {
+        if (field === 'stitches') {
+            jarumList[index].stitches = parseInt(value) || 0;
+        } else if (field === 'length') {
+            jarumList[index].length = parseFloat(value) || 0;
+        }
+        renderJarumTable();
+    }
+
+    function tambahJarum() {
+        const nextId = "J" + jarumList.length;
+        jarumList.push({ id: nextId, length: 2.00, stitches: 100 });
+        renderJarumTable();
+    }
+
+    function hapusJarum(index) {
+        if (jarumList.length <= 1) {
+            alert("Minimal harus ada 1 jarum.");
+            return;
+        }
+        jarumList.splice(index, 1);
+        renderJarumTable();
+    }
+
+    // 2. Fungsi Utama Simpan File (Capacitor Native vs Browser)
+    async function saveFileToDevice(fileName, dataContent, mimeType, isBase64 = false) {
+        const isCapacitor = window.Capacitor && window.Capacitor.isNativePlatform();
+
+        if (isCapacitor) {
+            try {
+                const Filesystem = window.Capacitor.Plugins.Filesystem;
+                let writeOptions = {
+                    path: fileName,
+                    directory: 'DOCUMENTS',
+                    data: dataContent
+                };
+
+                if (!isBase64) {
+                    writeOptions.encoding = 'utf8';
+                }
+
+                await Filesystem.writeFile(writeOptions);
+                alert(`File berhasil disimpan ke:\nDocuments/${fileName}`);
+            } catch (err) {
+                console.error("Capacitor Save Error:", err);
+                alert("Gagal menyimpan file Android: " + err.message);
+            }
+        } else {
+            // Web Browser Fallback
+            let downloadUrl;
+            if (isBase64) {
+                downloadUrl = `data:${mimeType};base64,${dataContent}`;
+            } else {
+                const blob = new Blob([dataContent], { type: mimeType });
+                downloadUrl = URL.createObjectURL(blob);
+            }
+
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            if (!isBase64) URL.revokeObjectURL(downloadUrl);
+        }
+    }
+
+    // 3. Handlers Fitur Export
+    async function simpanJSON() {
+        const nama = document.getElementById('namaEstimasi').value || 'Estimasi';
+        const totalPick = document.getElementById("totalPickDisplay").innerText;
+
+        const payload = {
+            namaEstimasi: nama,
+            timestamp: new Date().toISOString(),
+            listJarum: jarumList,
+            totalPick: parseInt(totalPick)
+        };
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+        await saveFileToDevice(`${nama.toLowerCase().replace(/\s+/g, '_')}.json`, jsonStr, 'application/json', false);
+    }
+
+    function muatJSON() {
+        alert("Fitur Muat JSON: Buka file JSON menggunakan file input.");
+    }
+
+    async function exportExcel() {
+        const nama = document.getElementById('namaEstimasi').value || 'Estimasi';
+        const totalPick = parseInt(document.getElementById("totalPickDisplay").innerText);
+
+        // Susun struktur sheet Excel
+        const rows = [
+            ["Nama Estimasi", nama],
+            ["Total Pick", totalPick],
+            [],
+            ["Jarum", "Panjang (cm)", "Stitch Count"]
+        ];
+
+        jarumList.forEach(j => {
+            rows.push([j.id, j.length, j.stitches]);
+        });
+
+        // Generate binary XLSX
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Estimasi");
+
+        const base64Excel = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+
+        await saveFileToDevice(
+            `${nama.toLowerCase().replace(/\s+/g, '_')}_export.xlsx`, 
+            base64Excel, 
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+            true
+        );
+    }
+
+    async function exportPNG() {
+        const element = document.getElementById('preview-container');
+        const nama = document.getElementById('namaEstimasi').value || 'Estimasi';
+
+        try {
+            const canvas = await html2canvas(element);
+            const base64Image = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, "");
+
+            await saveFileToDevice(
+                `${nama.toLowerCase().replace(/\s+/g, '_')}_preview.png`, 
+                base64Image, 
+                'image/png', 
+                true
+            );
+        } catch (err) {
+            console.error("PNG Capture Error:", err);
+            alert("Gagal merender gambar PNG.");
+        }
+    }
+</script>
+
+</body>
+</html>
