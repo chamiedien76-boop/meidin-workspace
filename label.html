@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meidin Picks Label</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #EDEFF2;
+    --panel: #FFFFFF;
+    --ink: #16202A;
+    --ink-soft: #5B6673;
+    --line: #D6DBE2;
+    --navy: #1F3A5F;
+    --navy-deep: #142845;
+    --rust: #B5502E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg);
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:24px 24px; background-position:-1px -1px;
+    font-family:'IBM Plex Sans', sans-serif; color:var(--ink); min-height:100vh;
+  }
+  
+  /* Topbar */
+  .topbar{
+    display:flex; align-items:center; gap:12px; padding:8px 16px;
+    background:var(--panel); border-bottom:2px solid var(--navy-deep); flex-wrap:wrap;
+  }
+  .topbar input[type=text]{
+    padding:6px 10px; border:1px solid var(--line); border-radius:4px; font-size:13px;
+    font-family:'IBM Plex Sans', sans-serif; min-width:180px; flex: 1;
+  }
+  .topbar .dens-all{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace;}
+  .topbar .dens-all input{width:45px; padding:4px 6px; border:1px solid var(--line); border-radius:4px; font-family:'IBM Plex Mono', monospace;}
+  .topbar .spacer{flex:1;}
+  .topbar .total{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; padding:4px 12px;
+    background:#F1F5F9; border:1px solid var(--line); border-radius:4px; color:var(--navy-deep);
+  }
+  .topbar .total b{font-size:15px;}
+
+  /* Buttons */
+  button{font-family:'IBM Plex Sans', sans-serif; cursor:pointer; transition:all 0.15s ease;}
+  button.primary{
+    background:var(--navy-deep); color:#fff; border:none; padding:6px 12px; border-radius:4px;
+    font-weight:600; font-size:12.5px;
+  }
+  button.primary:hover{background:var(--navy);}
+  button.small{padding:4px 8px; font-size:11.5px;}
+  button.ghost{background:#fff; border:1px solid var(--line); color:var(--ink-soft); padding:4px 8px; border-radius:4px; font-size:11.5px;}
+  button.ghost:hover{border-color:var(--ink-soft); color:var(--ink);}
+
+  /* Layout Flexible */
+  .layout{display:flex; position:relative; min-height:calc(100vh - 47px);}
+  
+  .side{
+    width: 310px; flex-shrink: 0; background:var(--panel); border-right:1px solid var(--line); 
+    padding:10px; overflow-y:auto; height: calc(100vh - 47px); position: sticky; top: 0;
+    transition: transform 0.3s ease; z-index: 1002;
+  }
+  
+  .canvas-area{
+    flex: 1; padding:16px; display:flex; flex-direction:column; align-items:center; gap:10px; width: 100%; min-width: 0;
+  }
+
+  /* Block Kompak */
+  .block{border:1px solid var(--line); border-radius:5px; padding:10px; margin-bottom:8px; background:#fff;}
+  .block h3{
+    margin:0 0 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--navy);
+    font-family:'IBM Plex Mono', monospace; font-weight:600;
+  }
+  
+  /* Upload Compact */
+  .dropzone{
+    border:1px dashed var(--line); border-radius:4px; padding:8px; text-align:center;
+    cursor:pointer; background:#FAFBFC; font-size:11.5px; color:var(--ink-soft);
+  }
+  .dropzone:hover{border-color:var(--navy); background:#F1F5F9;}
+  .dropzone b{color:var(--ink); display:block; font-size:12px;}
+  input[type=file]{display:none;}
+
+  /* Inputs compact layout */
+  .size-row{display:flex; gap:6px; align-items:flex-end; flex-wrap: wrap;}
+  .size-field{flex:1; min-width: 80px;}
+  .size-field label{display:block; font-size:10px; color:var(--ink-soft); margin-bottom:2px; font-family:'IBM Plex Mono', monospace;}
+  .size-field input, .size-field select{
+    width:100%; padding:4px 6px; border:1px solid var(--line); border-radius:4px; 
+    font-family:'IBM Plex Sans', sans-serif; font-size:12px; background:#fff;
+  }
+  .size-field input{font-family:'IBM Plex Mono', monospace;}
+
+  /* Jarum List Compact */
+  .jarum-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .jarum-header h3{margin:0;}
+  .jarum-list{display:flex; flex-direction:column; gap:6px;}
+  .jarum-empty{font-size:11.5px; color:var(--ink-soft); padding:4px 0; line-height:1.3;}
+  .jarum-row{
+    border:1px solid var(--line); border-radius:4px; padding:6px;
+    display:grid; grid-template-columns:16px 1fr 36px 36px auto; gap:4px; align-items:center;
+  }
+  .jarum-row.active{border-color:var(--navy); background:#EAF0F7;}
+  .jarum-swatch{width:16px; height:16px; border-radius:3px; border:1px solid rgba(0,0,0,.15); cursor:pointer; padding:0;}
+  .jarum-name{border:1px solid transparent; background:transparent; font-size:12px; font-weight:600; padding:1px; border-radius:3px; width:100%; font-family:inherit;}
+  .jarum-name:hover{border-color:var(--line);}
+  .jarum-name:focus{outline:none; border-color:var(--navy); background:#fff;}
+  .jarum-dens{width:36px; padding:2px 3px; border:1px solid var(--line); border-radius:3px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; text-align:center;}
+  .jarum-pick{font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:12px; text-align:right; color:var(--navy-deep);}
+  .jarum-actions{display:flex; gap:2px;}
+  .icon-btn{
+    width:22px; height:22px; border:1px solid var(--line); background:#fff; border-radius:3px;
+    display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--ink-soft);
+  }
+  .icon-btn:hover{border-color:var(--ink-soft); color:var(--ink);}
+  .icon-btn.edit.active{background:var(--navy-deep); border-color:var(--navy-deep); color:#fff;}
+  .icon-btn.del:hover{background:var(--rust); border-color:var(--rust); color:#fff;}
+  
+  /* Input Manual Panjang Blok */
+  .jarum-lines{grid-column:1/-1; font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;}
+  .jarum-lines .line-chip{
+    background:#fff; border:1px solid var(--line); border-radius:4px; padding:2px 5px;
+    display:flex; align-items:center; gap:3px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .jarum-lines .line-chip .line-len-input{
+    width:42px; border:1px solid var(--line); background:#FAFBFC; font-family:'IBM Plex Mono', monospace;
+    font-size:11px; font-weight:600; padding:1px 3px; text-align:center; border-radius:3px; color:var(--navy-deep);
+  }
+  .jarum-lines .line-chip .line-len-input:focus{ outline:none; border-color:var(--navy); background:#fff; }
+  .jarum-lines .line-chip button{border:none; background:none; color:var(--rust); font-weight:700; cursor:pointer; font-size:11px; padding:0 2px;}
+
+  .add-jarum-btn{width:100%; margin-top:6px; padding:5px; border:1px dashed var(--navy); border-radius:4px; background:#F1F5F9; color:var(--navy-deep); font-weight:600; font-size:11.5px;}
+  .add-jarum-btn:hover{background:#EAF0F7;}
+
+  /* Canvas Toolbar di Atas Gambar */
+  .canvas-tools-container{
+    display:flex; flex-direction:column; gap:8px;
+    width:100%; max-width:560px;
+  }
+  .canvas-tools-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#fff; padding:6px 10px; border:1px solid var(--line); border-radius:6px; flex-wrap: wrap;
+  }
+  .active-status{
+    font-size:11.5px; font-weight:500; color:var(--ink-soft);
+    display:flex; align-items:center; gap:6px; flex:1;
+  }
+  .active-status.on{color:var(--navy-deep);}
+  .active-status .dot{width:8px; height:8px; border-radius:50%; flex:none;}
+
+  /* Header Controls Tambahan di Atas Gambar */
+  .top-image-controls{
+    display:flex; flex-direction:column; gap:8px;
+    background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px 12px;
+  }
+  .top-controls-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  .info-size-box{
+    font-size:11.5px; color:var(--navy-deep); font-weight:600; font-family:'IBM Plex Mono', monospace;
+    background:#F1F5F9; padding:4px 8px; border-radius:4px; border:1px solid var(--line);
+  }
+  .dasaran-inline-group{
+    display:flex; align-items:center; gap:6px; font-size:11px; font-family:'IBM Plex Mono', monospace; flex-wrap: wrap;
+  }
+  .dasaran-inline-group label{color:var(--navy); font-weight:600;}
+  .dasaran-inline-group input{
+    width:48px; padding:3px 5px; border:1px solid var(--line); border-radius:4px;
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px;
+  }
+
+  /* Canvas UI */
+  #stageContainer { width: 100%; max-width: 560px; display: flex; justify-content: center; }
+  .stage-wrap{position:relative; background:repeating-conic-gradient(#e8ebef 0% 25%, #fff 0% 50%) 0 0/16px 16px; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .stage-wrap.empty{width:100%; max-width: 560px; height:320px; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:12.5px;}
+  canvas#stage{display:block; cursor:crosshair; max-width: 100%; height: auto;}
+
+  /* Modal Cropper Modern */
+  .modal-overlay{
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(22, 32, 42, 0.7); backdrop-filter:blur(2px); z-index:2000;
+    align-items:center; justify-content:center;
+  }
+  .modal-box{
+    background:#fff; border-radius:8px; padding:14px; width:95%; max-width:650px;
+    display:flex; flex-direction:column; gap:10px; box-shadow:0 10px 25px rgba(0,0,0,0.2);
+  }
+  .modal-header{display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:13.5px; color:var(--navy-deep);}
+  .crop-container{height:300px; width:100%; background:#16202A; border-radius:4px; overflow:hidden;}
+  .modal-controls{display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;}
+  .modal-controls .group{display:flex; gap:5px; align-items:center; flex-wrap: wrap;}
+  .tilt-slider-wrap{display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace;}
+  .tilt-slider-wrap input[type=range]{width:80px;}
+
+  /* Element Khusus Mobile Drawer & Overlay */
+  .overlay-hp {
+    display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.4); z-index: 1001; opacity: 0; transition: opacity 0.3s ease;
+  }
+  .btn-open-drawer {
+    display: none; position: fixed; bottom: 16px; right: 16px; z-index: 999;
+    padding: 10px 16px; background: var(--navy-deep); color: #fff; border: none;
+    border-radius: 30px; font-weight: 600; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+
+  /* MEDIA QUERIES RESPONSIVE UNTUK HP */
+  @media (max-width: 768px) {
+    .btn-open-drawer { display: block; }
+    
+    .overlay-hp.active { display: block; opacity: 1; }
+    
+    .side {
+      position: fixed; top: 0; left: 0; height: 100vh;
+      transform: translateX(-100%); width: 85%; max-width: 310px;
+      box-shadow: 4px 0 15px rgba(0,0,0,0.15);
+    }
+    
+    .side.active { transform: translateX(0); }
+    
+    .canvas-area { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Overlay untuk menutup drawer saat klik di luar panel HP -->
+  <div class="overlay-hp" id="overlayHp"></div>
+
+  <!-- Tombol Melayang Buka Panel di HP -->
+  <button class="btn-open-drawer" id="btnOpenDrawer">⚙️ Menu &amp; Pengaturan</button>
+
+  <div class="topbar">
+    <input type="text" id="estName" placeholder="Nama estimasi (mis. ARRAZ)">
+    <div class="dens-all">
+      Density <input type="number" id="densAll" value="42"> <button class="ghost small" id="setAllDens">Set Semua</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="total">Total <b id="totalPick">0</b> pick</div>
+  </div>
+
+  <div class="layout">
+    <!-- PANEL KIRI (DRAWER DI HP) -->
+    <div class="side" id="sidePanel">
+
+      <!-- Block Mockup Upload -->
+      <div class="block">
+        <h3>Mockup Desain</h3>
+        <div class="dropzone" id="dropzone">
+          <b id="dzMain">↑ Upload gambar</b>
+          <span id="dzSub">JPG / PNG</span>
+        </div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <!-- Block Spesifikasi Produksi -->
+      <div class="block">
+        <h3>Spesifikasi Produksi</h3>
+        
+        <div class="size-field" style="margin-bottom:6px;">
+          <label>Mesin</label>
+          <select id="mesinSelect">
+            <option value="Polyester Putih" selected>Polyester Putih</option>
+            <option value="Polyester Hitam">Polyester Hitam</option>
+            <option value="Satin Putih">Satin Putih</option>
+            <option value="Satin Hitam">Satin Hitam</option>
+          </select>
+        </div>
+
+        <div class="size-field" style="margin-bottom:6px;">
+          <label>Cutting</label>
+          <select id="cuttingSelect">
+            <option value="Biasa" selected>Biasa</option>
+            <option value="Sonic">Sonic</option>
+          </select>
+        </div>
+
+        <div class="size-field">
+          <label>Finishing</label>
+          <select id="finishingSelect">
+            <option value="Roll" selected>Roll</option>
+            <option value="Hotcut">Hotcut</option>
+            <option value="End Fold">End Fold</option>
+            <option value="Center Fold">Center Fold</option>
+            <option value="Mitre Fold">Mitre Fold</option>
+            <option value="Loop Fold">Loop Fold</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Block Jarum Warna -->
+      <div class="block">
+        <div class="jarum-header"><h3>Jarum Warna (<span id="jarumCount">0</span>)</h3></div>
+        <div class="jarum-list" id="jarumList">
+          <div class="jarum-empty" id="jarumEmpty">Belum ada warna. Klik "+ Tambah" lalu tarik garis vertikal pada gambar.</div>
+        </div>
+        <button class="add-jarum-btn" id="addJarumBtn">+ Tambah Jarum Warna</button>
+      </div>
+
+      <!-- Block Save & Export -->
+      <div class="block">
+        <h3>Proyek &amp; Export</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+          <button class="primary small" id="saveProjectBtn" style="grid-column:1/-1">💾 Simpan Proyek (.json)</button>
+          <button class="ghost small" id="loadProjectBtn">📂 Buka (.json)</button>
+          <button class="ghost small" id="exportXlsxBtn">⬇ Excel (.xlsx)</button>
+          <button class="ghost small" id="exportImgBtn" style="grid-column:1/-1; background:#F1F5F9; font-weight:600; color:var(--navy-deep);">📷 Gambar (.png)</button>
+        </div>
+        <input type="file" id="loadProjectFile" accept=".json" style="display:none;">
+      </div>
+
+    </div>
+
+    <!-- AREA CANVAS (KANAN) -->
+    <div class="canvas-area">
+      <div class="canvas-tools-container">
+        
+        <!-- Controls Ukuran & Dasaran di Atas Gambar (Kolom Kanan) -->
+        <div class="top-image-controls">
+          <!-- Row Input Lebar & Panjang -->
+          <div class="size-row">
+            <div class="size-field">
+              <label>Lebar (cm)</label>
+              <input type="number" id="lebarInput" step="0.01" placeholder="cth: 1.8">
+            </div>
+            <div class="size-field">
+              <label>Panjang (cm)</label>
+              <input type="number" id="panjangInput" step="0.01" placeholder="cth: 6">
+            </div>
+            <button class="primary small" id="setSizeBtn">Set</button>
+          </div>
+
+          <div class="top-controls-row">
+            <div class="info-size-box" id="sizeCurrent">Ukuran: - cm (- px/cm)</div>
+            
+            <div class="dasaran-inline-group">
+              <label>Dasaran:</label>
+              <span>Panjang</span>
+              <input type="number" id="dasaranPanjang" step="0.01" value="1" title="Panjang Dasaran (cm)">
+              <span>cm</span>
+              <span>Dens</span>
+              <input type="number" id="dasaranDensity" step="1" value="28" title="Density Dasaran">
+              <span id="dasaranSummary" style="color:var(--ink-soft); font-size:10px;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toolbar Atas Canvas -->
+        <div class="canvas-tools-bar">
+          <div class="active-status" id="activeStatus">
+            <span>Upload gambar mockup dulu.</span>
+          </div>
+          <button class="ghost small" id="openEditModalBtn" disabled>✂ Crop &amp; Adjust Gambar</button>
+        </div>
+      </div>
+
+      <div id="stageContainer">
+        <div class="stage-wrap empty" id="stageEmpty">Upload gambar mockup dulu di panel kiri</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Cropper & Rotate Modern -->
+  <div class="modal-overlay" id="cropperModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Edit Gambar &amp; Rotasi</span>
+        <button class="ghost small" id="cancelCropBtn" style="border:none; padding:0; font-size:16px;">✕</button>
+      </div>
+      <div class="crop-container">
+        <img id="cropperImage">
+      </div>
+      <div class="modal-controls">
+        <div class="group">
+          <button class="ghost small" id="rotateLeftBtn" title="Putar 90 Ke Kiri">↺ 90°</button>
+          <button class="ghost small" id="rotateRightBtn" title="Putar 90 Ke Kanan">↻ 90°</button>
+          <div class="tilt-slider-wrap">
+            <span>Miring:</span>
+            <input type="range" id="tiltSlider" min="-180" max="180" value="0" step="0.5">
+            <span id="tiltVal">0°</span>
+          </div>
+        </div>
+        <div class="group">
+          <button class="ghost small" id="resetCropBtn">Reset</button>
+          <button class="ghost small" id="applyCropOnlyBtn" style="border-color:var(--navy); color:var(--navy-deep); font-weight:600;">✂ Potong (Crop)</button>
+          <button class="primary small" id="saveAndCloseBtn">✓ Selesai</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ---------------- Logic Mobile Side Panel Drawer ----------------
+const sidePanel = document.getElementById('sidePanel');
+const overlayHp = document.getElementById('overlayHp');
+const btnOpenDrawer = document.getElementById('btnOpenDrawer');
+
+function toggleDrawer() {
+  sidePanel.classList.toggle('active');
+  overlayHp.classList.toggle('active');
+}
+
+btnOpenDrawer.addEventListener('click', toggleDrawer);
+overlayHp.addEventListener('click', toggleDrawer);
+
+// ---------------- Lazy loader library berat ----------------
+const __loadedAssets = {};
+function loadScriptOnce(src){
+  return new Promise((resolve, reject)=>{
+    if(__loadedAssets[src]){ resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = ()=>{ __loadedAssets[src]=true; resolve(); };
+    s.onerror = ()=>reject(new Error('Gagal memuat '+src));
+    document.body.appendChild(s);
+  });
+}
+function loadCssOnce(href, id){
+  return new Promise((resolve, reject)=>{
+    if(document.getElementById(id)){ resolve(); return; }
+    const link = document.createElement('link');
+    link.id = id; link.rel = 'stylesheet'; link.href = href;
+    link.onload = ()=>resolve();
+    link.onerror = ()=>reject(new Error('Gagal memuat '+href));
+    document.head.appendChild(link);
+  });
+}
+async function ensureCropper(){
+  await loadCssOnce('https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css', 'cropperCssLink');
+  if(typeof Cropper === 'undefined'){
+    await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js');
+  }
+}
+async function ensureExcelJS(){
+  if(typeof ExcelJS === 'undefined'){
+    await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+  }
+}
+
+// ---------------- State ----------------
+let img = null, imgW=0, imgH=0;
+let panjangCm = null, lebarCm = null;
+let jarumList = [];
+let activeJarumId = null;
+let nextId = 1;
+
+let cropper = null;
+let originalSrcBeforeModal = null;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const stageContainer = document.getElementById('stageContainer');
+const lebarInput = document.getElementById('lebarInput');
+const panjangInput = document.getElementById('panjangInput');
+const sizeCurrent = document.getElementById('sizeCurrent');
+const openEditModalBtn = document.getElementById('openEditModalBtn');
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); });
+dropzone.addEventListener('dragover', e=>{e.preventDefault(); dropzone.style.borderColor='var(--navy)';});
+dropzone.addEventListener('dragleave', ()=>{dropzone.style.borderColor='';});
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.style.borderColor='';
+  if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file){
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    const im = new Image();
+    im.onload = ()=>{
+      img = im; imgW = im.width; imgH = im.height;
+      document.getElementById('dzMain').textContent = file.name;
+      document.getElementById('dzSub').textContent = imgW+' × '+imgH+' px';
+
+      openEditModalBtn.disabled = false;
+
+      if(panjangCm===null){ panjangCm = 6; lebarCm = +( (imgW/imgH)*panjangCm ).toFixed(2); }
+      panjangInput.value = panjangCm;
+      lebarInput.value = lebarCm;
+      updateSizeCurrent();
+      buildStage();
+    };
+    im.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+document.getElementById('setSizeBtn').addEventListener('click', ()=>{
+  if(!img) return;
+  const lv = parseFloat(lebarInput.value), pv = parseFloat(panjangInput.value);
+  const aspect = imgW/imgH;
+  if(pv>0 && (!lv || lv<=0)){
+    panjangCm = pv; lebarCm = +(aspect*pv).toFixed(2);
+  } else if(lv>0 && (!pv || pv<=0)){
+    lebarCm = lv; panjangCm = +(lv/aspect).toFixed(2);
+  } else if(lv>0 && pv>0){
+    lebarCm = lv; panjangCm = pv;
+  } else return;
+  lebarInput.value = lebarCm; panjangInput.value = panjangCm;
+  updateSizeCurrent();
+  renderJarumList();
+  drawStage();
+});
+
+function updateSizeCurrent(){
+  if(!img || !panjangCm){ sizeCurrent.textContent='Ukuran: - cm (- px/cm)'; return; }
+  const pxPerCmVal = imgH/panjangCm;
+  sizeCurrent.textContent = `Ukuran: ${lebarCm} × ${panjangCm} cm (${pxPerCmVal.toFixed(1)} px/cm)`;
+  updateDasaranSummary();
+}
+function pxPerCm(){ return imgH/panjangCm; }
+
+function updateDasaranSummary(){
+  const el = document.getElementById('dasaranSummary');
+  if(!el) return;
+  const dp = parseFloat(document.getElementById('dasaranPanjang').value)||0;
+  if(!panjangCm){ el.textContent=''; return; }
+  const efektif = Math.max(0, panjangCm - dp);
+  el.textContent = `(Efektif: ${efektif.toFixed(2)} cm)`;
+}
+document.getElementById('dasaranPanjang').addEventListener('input', ()=>{ updateDasaranSummary(); renderJarumList(); });
+document.getElementById('dasaranDensity').addEventListener('input', renderJarumList);
+
+// ---------------- Modal Cropper & Rotate Logic ----------------
+openEditModalBtn.addEventListener('click', async ()=>{
+  if(!img) return;
+  const originalLabel = openEditModalBtn.textContent;
+  openEditModalBtn.textContent = 'Memuat editor...';
+  openEditModalBtn.disabled = true;
+  try{
+    await ensureCropper();
+    const modal = document.getElementById('cropperModal');
+    originalSrcBeforeModal = img.src;
+    modal.style.display = 'flex';
+    initCropper(img.src);
+  }catch(err){
+    alert('Gagal memuat modul crop: '+err.message);
+  }finally{
+    openEditModalBtn.textContent = originalLabel;
+    openEditModalBtn.disabled = false;
+  }
+});
+
+function initCropper(imageSrc){
+  if(cropper) cropper.destroy();
+  const cropImg = document.getElementById('cropperImage');
+  cropImg.src = imageSrc;
+
+  document.getElementById('tiltSlider').value = 0;
+  document.getElementById('tiltVal').textContent = '0°';
+
+  cropper = new Cropper(cropImg, {
+    viewMode: 1,
+    autoCropArea: 0.9,
+    background: false
+  });
+}
+
+document.getElementById('cancelCropBtn').addEventListener('click', closeCropperModal);
+
+function closeCropperModal(){
+  document.getElementById('cropperModal').style.display = 'none';
+  if(cropper){ cropper.destroy(); cropper = null; }
+}
+
+document.getElementById('rotateLeftBtn').addEventListener('click', () => { if(cropper) cropper.rotate(-90); });
+document.getElementById('rotateRightBtn').addEventListener('click', () => { if(cropper) cropper.rotate(90); });
+
+const tiltSlider = document.getElementById('tiltSlider');
+tiltSlider.addEventListener('input', (e)=>{
+  if(!cropper) return;
+  const val = parseFloat(e.target.value);
+  document.getElementById('tiltVal').textContent = val + '°';
+  cropper.rotateTo(val);
+});
+
+document.getElementById('resetCropBtn').addEventListener('click', ()=>{
+  if(originalSrcBeforeModal){
+    initCropper(originalSrcBeforeModal);
+  }
+});
+
+document.getElementById('applyCropOnlyBtn').addEventListener('click', ()=>{
+  if(!cropper) return;
+  const canvas = cropper.getCroppedCanvas();
+  if(!canvas) return;
+
+  const croppedDataUrl = canvas.toDataURL('image/png');
+  initCropper(croppedDataUrl);
+});
+
+document.getElementById('saveAndCloseBtn').addEventListener('click', ()=>{
+  if(!cropper) return;
+  
+  const canvas = cropper.getCroppedCanvas();
+  if(!canvas) return;
+
+  const finalDataUrl = canvas.toDataURL('image/png');
+  const im = new Image();
+  im.onload = ()=>{
+    img = im;
+    imgW = im.width;
+    imgH = im.height;
+    document.getElementById('dzSub').textContent = imgW+' × '+imgH+' px';
+
+    if (panjangCm) lebarCm = +((imgW / imgH) * panjangCm).toFixed(2);
+    panjangInput.value = panjangCm;
+    lebarInput.value = lebarCm;
+
+    closeCropperModal();
+    updateSizeCurrent();
+    buildStage();
+    renderJarumList();
+  };
+  im.src = finalDataUrl;
+});
+
+// ---------------- Canvas Stage ----------------
+let displayScale = 1;
+function buildStage(){
+  stageContainer.innerHTML = `<div class="stage-wrap" id="stageWrap"><canvas id="stage"></canvas></div>`;
+  const stage = document.getElementById('stage');
+  const maxW = 560, maxH = 560;
+  displayScale = Math.min(maxW/imgW, maxH/imgH, 1);
+  stage.width = imgW; stage.height = imgH;
+  stage.style.width = (imgW*displayScale)+'px';
+  stage.style.height = (imgH*displayScale)+'px';
+  wireStageEvents(stage);
+  updateActiveStatus();
+  drawStage();
+}
+
+function laneX(idx){
+  const base = imgW*0.62;
+  const step = Math.max(16, imgW*0.03);
+  const lane = idx % 2 === 0 ? idx/2 : -(idx+1)/2; // 0, -1, 1, -2, 2, ...
+  const x = base + lane*step;
+  return Math.min(imgW*0.94, Math.max(imgW*0.08, x));
+}
+
+function drawStage(dragPreview){
+  const stage = document.getElementById('stage');
+  if(!stage) return;
+  const ctx = stage.getContext('2d');
+  ctx.clearRect(0,0,imgW,imgH);
+  ctx.drawImage(img,0,0);
+
+  const lineWidthPx = Math.max(2, imgH*0.006);
+  jarumList.forEach((j,idx)=>{
+    const isActive = j.id===activeJarumId;
+    j.lines.forEach(ln=>{
+      const x = ln.x!=null ? ln.x : laneX(idx);
+      drawLine(ctx, ln.y1, ln.y2, j.color, isActive, lineWidthPx, false, x);
+    });
+  });
+  if(dragPreview){
+    const idx = jarumList.findIndex(x=>x.id===activeJarumId);
+    const j = jarumList[idx];
+    const x = dragPreview.x!=null ? dragPreview.x : laneX(idx);
+    if(j) drawLine(ctx, dragPreview.y1, dragPreview.y2, j.color, true, lineWidthPx, true, x);
+  }
+}
+
+function drawLine(ctx, y1, y2, color, active, lw, preview, x){
+  const yTop = Math.min(y1,y2), yBot = Math.max(y1,y2);
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.setLineDash(active ? [] : [imgH*0.012, imgH*0.008]);
+  ctx.beginPath(); ctx.moveTo(x,yTop); ctx.lineTo(x,yBot); ctx.stroke();
+  ctx.setLineDash([]);
+  
+  const capR = lw*1.3;
+  [yTop,yBot].forEach(yy=>{
+    ctx.beginPath(); ctx.arc(x,yy,capR,0,7); ctx.fillStyle='#fff'; ctx.fill();
+    ctx.lineWidth=lw*0.6; ctx.strokeStyle=color; ctx.stroke();
+  });
+  
+  const cm = Math.abs(y2-y1)/pxPerCm();
+  ctx.font = `${Math.max(11,imgH*0.022)}px 'IBM Plex Mono', monospace`;
+  const label = cm.toFixed(2)+'cm';
+  const tw = ctx.measureText(label).width;
+  const midY = (yTop+yBot)/2;
+  ctx.fillStyle = active ? '#142845' : 'rgba(20,40,69,0.55)';
+  ctx.fillRect(x-tw/2-5, midY-11, tw+10, 20);
+  ctx.fillStyle = '#fff';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, x, midY+0.5);
+  ctx.textAlign='start';
+}
+
+let drag = null;
+function wireStageEvents(stage){
+  function handleStart(e){
+    if(!activeJarumId) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const [x,y] = toImgCoords({ clientX, clientY }, stage);
+    const j = jarumList.find(x=>x.id===activeJarumId);
+    const idx = jarumList.findIndex(x=>x.id===activeJarumId);
+    const grabR = imgH*0.02;
+    const grabX = imgW*0.05;
+    for(const ln of j.lines){
+      const lx = ln.x!=null ? ln.x : laneX(idx);
+      if(Math.abs(x-lx) > grabX) continue;
+      const yTop=Math.min(ln.y1,ln.y2), yBot=Math.max(ln.y1,ln.y2);
+      if(Math.abs(y-yTop)<grabR){ drag={mode:'resize-top', line:ln}; return; }
+      if(Math.abs(y-yBot)<grabR){ drag={mode:'resize-bottom', line:ln}; return; }
+      if(y>yTop && y<yBot){ drag={mode:'move', line:ln, startX:x, startY:y, origX:lx, origY1:ln.y1, origY2:ln.y2}; return; }
+    }
+    drag = {mode:'new', x:x, y1:y, y2:y};
+  }
+
+  stage.addEventListener('mousedown', handleStart);
+  stage.addEventListener('touchstart', e=>{ handleStart(e); e.preventDefault(); }, {passive: false});
+
+  let rafPending = false, lastMoveEvent = null;
+  function processDragMove(e){
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const [x,y] = toImgCoords({ clientX, clientY }, stage);
+    const cy = Math.max(0, Math.min(imgH, y));
+    const cx = Math.max(imgW*0.02, Math.min(imgW*0.98, x));
+    if(drag.mode==='new'){ drag.y2 = cy; drawStage({x:drag.x,y1:drag.y1,y2:drag.y2}); }
+    else if(drag.mode==='resize-top'){ drag.line.y1 = cy; drawStage(); renderJarumList(); }
+    else if(drag.mode==='resize-bottom'){ drag.line.y2 = cy; drawStage(); renderJarumList(); }
+    else if(drag.mode==='move'){
+      const dy = cy - drag.startY;
+      const dx = cx - drag.startX;
+      const h = drag.origY2-drag.origY1;
+      let ny1 = drag.origY1+dy, ny2 = drag.origY2+dy;
+      if(ny1<0){ ny1=0; ny2=h; } if(ny2>imgH){ ny2=imgH; ny1=imgH-h; }
+      let nx = drag.origX+dx;
+      nx = Math.max(imgW*0.02, Math.min(imgW*0.98, nx));
+      drag.line.y1=ny1; drag.line.y2=ny2; drag.line.x=nx;
+      drawStage(); renderJarumList();
+    }
+  }
+
+  function handleMove(e){
+    if(!drag) return;
+    lastMoveEvent = e;
+    if(rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(()=>{
+      rafPending = false;
+      if(drag && lastMoveEvent) processDragMove(lastMoveEvent);
+    });
+  }
+
+  stage.addEventListener('mousemove', handleMove);
+  stage.addEventListener('touchmove', e=>{ handleMove(e); e.preventDefault(); }, {passive: false});
+
+  function handleEnd(){
+    if(!drag) return;
+    if(drag.mode==='new' && Math.abs(drag.y2-drag.y1) > imgH*0.01){
+      const j = jarumList.find(x=>x.id===activeJarumId);
+      j.lines.push({ id: nextId++, x: drag.x, y1: drag.y1, y2: drag.y2 });
+      renderJarumList();
+    }
+    drag=null;
+    drawStage();
+  }
+
+  window.addEventListener('mouseup', handleEnd);
+  window.addEventListener('touchend', handleEnd);
+}
+
+function toImgCoords(e, stage){
+  const rect = stage.getBoundingClientRect();
+  const sx = imgW/rect.width, sy = imgH/rect.height;
+  return [ (e.clientX-rect.left)*sx, (e.clientY-rect.top)*sy ];
+}
+
+// ---------------- Jarum List Controls ----------------
+const PALETTE = ['#1F3A5F','#B5502E','#3C6E52','#8B3A62','#A67C1B','#4A5568'];
+document.getElementById('addJarumBtn').addEventListener('click', ()=>{
+  const id = nextId++;
+  const color = PALETTE[jarumList.length % PALETTE.length];
+  jarumList.push({ id, nama:'J'+jarumList.length, dens: parseFloat(document.getElementById('densAll').value)||42, color, lines:[] });
+  activeJarumId = id;
+  renderJarumList();
+  updateActiveStatus();
+  drawStage();
+});
+
+document.getElementById('setAllDens').addEventListener('click', ()=>{
+  const v = parseFloat(document.getElementById('densAll').value)||0;
+  jarumList.forEach(j=>j.dens=v);
+  renderJarumList();
+});
+
+function renderJarumList(){
+  const list = document.getElementById('jarumList');
+  document.getElementById('jarumCount').textContent = jarumList.length;
+  document.getElementById('jarumEmpty').style.display = jarumList.length? 'none':'block';
+  list.querySelectorAll('.jarum-row').forEach(el=>el.remove());
+
+  let total = 0;
+  jarumList.forEach(j=>{
+    const panjang = j.lines.reduce((s,ln)=>s+Math.abs(ln.y2-ln.y1),0)/pxPerCm();
+    const pick = Math.round(j.dens*panjang);
+    total += pick;
+
+    const row = document.createElement('div');
+    row.className = 'jarum-row' + (j.id===activeJarumId ? ' active':'');
+    row.innerHTML = `
+      <input type="color" class="jarum-swatch" value="${rgbToHex(j.color)}" data-id="${j.id}">
+      <input type="text" class="jarum-name" value="${j.nama}" data-id="${j.id}">
+      <input type="number" class="jarum-dens" value="${j.dens}" data-id="${j.id}">
+      <div class="jarum-pick">${pick}</div>
+      <div class="jarum-actions">
+        <button class="icon-btn edit ${j.id===activeJarumId?'active':''}" data-id="${j.id}" title="Aktifkan / edit">✎</button>
+        <button class="icon-btn del" data-id="${j.id}" title="Hapus">🗑</button>
+      </div>
+      ${j.lines.length ? `<div class="jarum-lines">${j.lines.map(ln=>`<span class="line-chip"><input type="number" step="0.1" class="line-len-input" value="${(Math.abs(ln.y2-ln.y1)/pxPerCm()).toFixed(2)}" data-jid="${j.id}" data-lid="${ln.id}">cm <button data-jid="${j.id}" data-lid="${ln.id}">✕</button></span>`).join('')}</div>` : ''}
+    `;
+    list.appendChild(row);
+  });
+
+  const dp = parseFloat(document.getElementById('dasaranPanjang').value)||0;
+  const dd = parseFloat(document.getElementById('dasaranDensity').value)||0;
+  total += Math.round(dp*dd);
+
+  document.getElementById('totalPick').textContent = total;
+
+  list.querySelectorAll('.jarum-swatch').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const j = jarumList.find(x=>x.id==inp.dataset.id); if(j){ j.color=inp.value; drawStage(); }
+    });
+  });
+  list.querySelectorAll('.jarum-name').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const j = jarumList.find(x=>x.id==inp.dataset.id); if(j) j.nama=inp.value;
+      updateActiveStatus();
+    });
+  });
+  list.querySelectorAll('.jarum-dens').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const j = jarumList.find(x=>x.id==inp.dataset.id); if(j) j.dens=parseFloat(inp.value)||0;
+      renderJarumList();
+    });
+  });
+  list.querySelectorAll('.icon-btn.edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = parseFloat(btn.dataset.id);
+      activeJarumId = (activeJarumId===id) ? null : id;
+      renderJarumList(); updateActiveStatus(); drawStage();
+    });
+  });
+  list.querySelectorAll('.icon-btn.del').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = parseFloat(btn.dataset.id);
+      jarumList = jarumList.filter(j=>j.id!==id);
+      if(activeJarumId===id) activeJarumId=null;
+      renderJarumList(); updateActiveStatus(); drawStage();
+    });
+  });
+  list.querySelectorAll('.line-chip button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const j = jarumList.find(x=>x.id==btn.dataset.jid);
+      if(j) j.lines = j.lines.filter(l=>l.id!=btn.dataset.lid);
+      renderJarumList(); drawStage();
+    });
+  });
+
+  // KETIK MANUAL PANJANG GARIS
+  list.querySelectorAll('.line-len-input').forEach(inp=>{
+    const commitLen = ()=>{
+      const j = jarumList.find(x=>x.id==inp.dataset.jid);
+      const ln = j && j.lines.find(l=>l.id==inp.dataset.lid);
+      if(!ln) return;
+      const newCm = Math.max(0, parseFloat(inp.value)||0);
+      const newPx = newCm*pxPerCm();
+      let newTop = Math.min(ln.y1, ln.y2);
+      let newBot = newTop + newPx;
+      if(newBot > imgH){
+        newBot = imgH;
+        newTop = Math.max(0, newBot - newPx);
+      }
+      if(newTop < 0) newTop = 0;
+      ln.y1 = newTop; ln.y2 = newBot;
+      renderJarumList(); drawStage();
+    };
+    inp.addEventListener('change', commitLen);
+    inp.addEventListener('focus', ()=>{ inp.select(); });
+    inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }
+      else if(e.shiftKey && (e.key==='ArrowUp' || e.key==='ArrowDown')){
+        e.preventDefault();
+        const cur = parseFloat(inp.value)||0;
+        inp.value = (e.key==='ArrowUp' ? cur+1 : Math.max(0,cur-1)).toFixed(2);
+        commitLen();
+      }
+    });
+  });
+}
+
+function updateActiveStatus(){
+  const el = document.getElementById('activeStatus');
+  if(!el) return;
+  const j = jarumList.find(x=>x.id===activeJarumId);
+  if(j){
+    el.classList.add('on');
+    el.innerHTML = `<span class="dot" style="background:${j.color}"></span> Active: <b>${j.nama}</b> — Tarik garis vertikal di gambar.`;
+  } else {
+    el.classList.remove('on');
+    el.textContent = jarumList.length
+      ? 'Pilih pensil (✎) pada jarum untuk tarik garis.'
+      : 'Tambahkan jarum warna dulu di panel kiri.';
+  }
+}
+
+function rgbToHex(c){
+  if(c.startsWith('#')) return c;
+  return c;
+}
+
+// ---------------- Save / Load / Export ----------------
+function downloadBlob(content, filename, type){
+  const blob = new Blob([content], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('saveProjectBtn').addEventListener('click', ()=>{
+  if(!img){ alert('Upload gambar dulu sebelum menyimpan.'); return; }
+  const project = {
+    version: 1,
+    estName: document.getElementById('estName').value,
+    imageDataUrl: (()=>{ const c=document.createElement('canvas'); c.width=imgW; c.height=imgH; c.getContext('2d').drawImage(img,0,0); return c.toDataURL('image/png'); })(),
+    imgW, imgH, panjangCm, lebarCm,
+    mesin: document.getElementById('mesinSelect').value,
+    cutting: document.getElementById('cuttingSelect').value,
+    finishing: document.getElementById('finishingSelect').value,
+    dasaranPanjang: parseFloat(document.getElementById('dasaranPanjang').value)||0,
+    dasaranDensity: parseFloat(document.getElementById('dasaranDensity').value)||0,
+    jarumList: jarumList.map(j=>({ id:j.id, nama:j.nama, dens:j.dens, color:j.color, lines:j.lines })),
+    nextId
+  };
+  const nameSafe = (project.estName||'estimasi').trim().replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'_') || 'estimasi';
+  downloadBlob(JSON.stringify(project,null,2), nameSafe+'.json', 'application/json');
+});
+
+document.getElementById('loadProjectBtn').addEventListener('click', ()=> document.getElementById('loadProjectFile').click());
+document.getElementById('loadProjectFile').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const p = JSON.parse(ev.target.result);
+      const im = new Image();
+      im.onload = ()=>{
+        img = im; imgW = p.imgW; imgH = p.imgH;
+        panjangCm = p.panjangCm; lebarCm = p.lebarCm;
+        document.getElementById('estName').value = p.estName||'';
+        document.getElementById('dzMain').textContent = 'Proyek dimuat';
+        document.getElementById('dzSub').textContent = imgW+' × '+imgH+' px';
+        panjangInput.value = panjangCm; lebarInput.value = lebarCm;
+        
+        if(p.mesin) document.getElementById('mesinSelect').value = p.mesin;
+        if(p.cutting) document.getElementById('cuttingSelect').value = p.cutting;
+        if(p.finishing) document.getElementById('finishingSelect').value = p.finishing;
+        
+        document.getElementById('dasaranPanjang').value = p.dasaranPanjang||0;
+        document.getElementById('dasaranDensity').value = p.dasaranDensity||28;
+        jarumList = (p.jarumList||[]).map(j=>({...j}));
+        nextId = p.nextId || (Math.max(0,...jarumList.map(j=>j.id))+1);
+        activeJarumId = null;
+        openEditModalBtn.disabled = false;
+        updateSizeCurrent();
+        buildStage();
+        renderJarumList();
+      };
+      im.src = p.imageDataUrl;
+    } catch(err){
+      alert('File proyek tidak valid: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+function collectResultRows(){
+  const rows = [];
+  jarumList.forEach(j=>{
+    const panjang = j.lines.reduce((s,ln)=>s+Math.abs(ln.y2-ln.y1),0)/pxPerCm();
+    rows.push([j.nama, j.dens, +panjang.toFixed(2), Math.round(j.dens*panjang)]);
+  });
+  const dp = parseFloat(document.getElementById('dasaranPanjang').value)||0;
+  const dd = parseFloat(document.getElementById('dasaranDensity').value)||0;
+  if(dp>0) rows.push(['DASARAN', dd, +dp.toFixed(2), Math.round(dp*dd)]);
+  return rows;
+}
+
+// ---------------- Export Excel (White Background & Clean View) ----------------
+document.getElementById('exportXlsxBtn').addEventListener('click', async () => {
+  if (!img) { alert('Upload gambar dulu.'); return; }
+  
+  const btn = document.getElementById('exportXlsxBtn');
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Membuat...'; 
+  btn.disabled = true;
+
+  try {
+    await ensureExcelJS();
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Hasil');
+
+    ws.views = [{ showGridLines: false }];
+
+    ws.getColumn('A').width = 12; 
+    ws.getColumn('B').width = 1.8;  
+    ws.getColumn('C').width = 12;   
+    ws.getColumn('D').width = 12;   
+    ws.getColumn('E').width = 1.8;  
+    ws.getColumn('F').width = 17;   
+    ws.getColumn('G').width = 3;    
+    ws.getColumn('H').width = 22;   
+
+    const thinBorder = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' }
+    };
+
+    const whiteFill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFFF' }
+    };
+
+    const estNameVal = document.getElementById('estName').value || 'ARRAZ';
+    const densAllVal = parseFloat(document.getElementById('densAll').value) || 42;
+    const lebarVal = lebarCm ? `${lebarCm} cm` : '-';
+    const panjangVal = panjangCm ? `${panjangCm} cm` : '-';
+    
+    const mesinVal = document.getElementById('mesinSelect').value;
+    const cuttingVal = document.getElementById('cuttingSelect').value;
+    const finishingVal = document.getElementById('finishingSelect').value;
+
+    ws.getCell('A1').value = 'Nama';     ws.getCell('B1').value = ':'; ws.getCell('C1').value = estNameVal;
+    ws.getCell('D1').value = 'Mesin';    ws.getCell('E1').value = ':'; ws.getCell('F1').value = mesinVal;
+
+    ws.getCell('A2').value = 'Lebar';    ws.getCell('B2').value = ':'; ws.getCell('C2').value = lebarVal;
+    ws.getCell('D2').value = 'Cutting';  ws.getCell('E2').value = ':'; ws.getCell('F2').value = cuttingVal;
+
+    ws.getCell('A3').value = 'Panjang';  ws.getCell('B3').value = ':'; ws.getCell('C3').value = panjangVal;
+    ws.getCell('D3').value = 'Finishing';ws.getCell('E3').value = ':'; ws.getCell('F3').value = finishingVal;
+
+    ws.getCell('A4').value = 'Density';  ws.getCell('B4').value = ':'; ws.getCell('C4').value = densAllVal;
+
+    const leftMetaCells = ['A1','B1','C1','E1','F1',
+                           'A2','B2','C2','E2','F2',
+                           'A3','B3','C3','E3','F3',
+                           'A4','B4','C4'];
+    leftMetaCells.forEach(cellKey => {
+      const c = ws.getCell(cellKey);
+      c.alignment = { horizontal: 'left', vertical: 'middle' };
+      c.fill = whiteFill;
+    });
+
+    const rightMetaCells = ['D1','D2','D3'];
+    rightMetaCells.forEach(cellKey => {
+      const c = ws.getCell(cellKey);
+      c.alignment = { horizontal: 'right', vertical: 'middle' };
+      c.fill = whiteFill;
+    });
+
+    ws.mergeCells('A5:B5');       
+    ws.getCell('A5').value = 'WARNA';
+
+    ws.getCell('C5').value = 'DENSITY'; 
+
+    ws.mergeCells('D5:E5');       
+    ws.getCell('D5').value = 'PANJANG (cm)';
+
+    ws.getCell('F5').value = 'PICK';    
+
+    ['A5', 'B5', 'C5', 'D5', 'E5', 'F5'].forEach(cellKey => {
+      const cell = ws.getCell(cellKey);
+      cell.font = { bold: true };
+      cell.border = thinBorder;
+      cell.fill = whiteFill;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    let currentRow = 6;
+    const resultRows = collectResultRows();
+
+    resultRows.forEach(r => {
+      ws.mergeCells(`A${currentRow}:B${currentRow}`); 
+      ws.mergeCells(`D${currentRow}:E${currentRow}`); 
+      
+      const cWarna = ws.getCell(`A${currentRow}`);
+      const cB = ws.getCell(`B${currentRow}`);
+      const cDens = ws.getCell(`C${currentRow}`);
+      const cPanjang = ws.getCell(`D${currentRow}`);
+      const cE = ws.getCell(`E${currentRow}`);
+      const cPick = ws.getCell(`F${currentRow}`);
+
+      cWarna.value = r[0];
+      cDens.value = Number(r[1]);
+      cPanjang.value = Number(r[2]);
+      cPick.value = Number(r[3]);
+      cPick.numFmt = '0';
+
+      [cWarna, cB, cDens, cPanjang, cE, cPick].forEach(c => {
+        c.border = thinBorder;
+        c.fill = whiteFill;
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      currentRow++;
+    });
+
+    ws.mergeCells(`A${currentRow}:E${currentRow}`);
+    const totalCell = ws.getCell(`A${currentRow}`);
+    totalCell.value = 'TOTAL';
+    totalCell.font = { bold: true };
+    totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['A', 'B', 'C', 'D', 'E'].forEach(col => {
+      const cell = ws.getCell(`${col}${currentRow}`);
+      cell.border = thinBorder;
+      cell.fill = whiteFill;
+    });
+
+    const totalPickVal = parseInt(document.getElementById('totalPick').textContent) || 0;
+    const totalPickCell = ws.getCell(`F${currentRow}`);
+    totalPickCell.value = Number(totalPickVal);
+    totalPickCell.numFmt = '0';
+    totalPickCell.font = { bold: true };
+    totalPickCell.border = thinBorder;
+    totalPickCell.fill = whiteFill;
+    totalPickCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const c = document.createElement('canvas');
+    c.width = imgW; 
+    c.height = imgH;
+    c.getContext('2d').drawImage(img, 0, 0);
+    const base64 = c.toDataURL('image/png').split(',')[1];
+    
+    const imageId = wb.addImage({ base64, extension: 'png' });
+    
+    const maxPixelH = 320; 
+    const scale = maxPixelH / imgH;
+    
+    ws.addImage(imageId, {
+      tl: { col: 7.05, row: 0.2 },
+      ext: { width: imgW * scale, height: imgH * scale }
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const nameSafe = (document.getElementById('estName').value || 'estimasi')
+      .trim()
+      .replace(/[^a-z0-9\-_ ]/gi, '_') || 'estimasi';
+      
+    downloadBlob(buffer, `${nameSafe}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+  } catch (err) {
+    alert('Gagal membuat file xlsx: ' + err.message);
+  } finally {
+    btn.textContent = originalLabel; 
+    btn.disabled = false;
+  }
+});
+
+// ---------------- Export Tampilan Persis XLS Ke Format Gambar (.PNG) ----------------
+document.getElementById('exportImgBtn').addEventListener('click', async () => {
+  if (!img) { alert('Upload gambar dulu.'); return; }
+
+  const btn = document.getElementById('exportImgBtn');
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Memproses PNG...';
+  btn.disabled = true;
+
+  try {
+    const estNameVal = document.getElementById('estName').value || 'ARRAZ';
+    const densAllVal = parseFloat(document.getElementById('densAll').value) || 42;
+    const lebarVal = lebarCm ? `${lebarCm} cm` : '-';
+    const panjangVal = panjangCm ? `${panjangCm} cm` : '-';
+    const mesinVal = document.getElementById('mesinSelect').value;
+    const cuttingVal = document.getElementById('cuttingSelect').value;
+    const finishingVal = document.getElementById('finishingSelect').value;
+    const resultRows = collectResultRows();
+    const totalPickVal = parseInt(document.getElementById('totalPick').textContent) || 0;
+
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+
+    const padding = 30;
+    const tableW = 420;
+    const rowH = 28;
+    const metaH = 120;
+    const tableHeaderH = 32;
+    const rowsH = (resultRows.length + 1) * rowH;
+    
+    const imgMaxH = 300;
+    const imgScale = imgMaxH / imgH;
+    const imgDisplayW = imgW * imgScale;
+    const imgDisplayH = imgH * imgScale;
+
+    const canvasW = padding + tableW + 40 + imgDisplayW + padding;
+    const canvasH = Math.max(padding + metaH + tableHeaderH + rowsH + padding, padding + imgDisplayH + padding);
+
+    c.width = canvasW * 2;
+    c.height = canvasH * 2;
+    ctx.scale(2, 2);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    ctx.fillStyle = '#16202A';
+    ctx.font = "13px 'IBM Plex Sans', sans-serif";
+
+    let y = padding + 15;
+    const drawMetaRow = (lLabel, lVal, rLabel, rVal) => {
+      ctx.font = "bold 12px 'IBM Plex Sans', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(lLabel, padding, y);
+      ctx.font = "12px 'IBM Plex Sans', sans-serif";
+      ctx.fillText(`:  ${lVal}`, padding + 65, y);
+
+      ctx.font = "bold 12px 'IBM Plex Sans', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(rLabel, padding + 260, y);
+      ctx.font = "12px 'IBM Plex Sans', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`:  ${rVal}`, padding + 270, y);
+      y += 24;
+    };
+
+    drawMetaRow('Nama', estNameVal, 'Mesin', mesinVal);
+    drawMetaRow('Lebar', lebarVal, 'Cutting', cuttingVal);
+    drawMetaRow('Panjang', panjangVal, 'Finishing', finishingVal);
+    
+    ctx.font = "bold 12px 'IBM Plex Sans', sans-serif";
+    ctx.fillText('Density', padding, y);
+    ctx.font = "12px 'IBM Plex Sans', sans-serif";
+    ctx.fillText(`:  ${densAllVal}`, padding + 65, y);
+
+    y += 25;
+    const cols = [
+      { name: 'WARNA', w: 120, align: 'center' },
+      { name: 'DENSITY', w: 90, align: 'center' },
+      { name: 'PANJANG (cm)', w: 110, align: 'center' },
+      { name: 'PICK', w: 100, align: 'center' }
+    ];
+
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    let currX = padding;
+
+    cols.forEach(col => {
+      ctx.strokeRect(currX, y, col.w, tableHeaderH);
+      ctx.font = "bold 12px 'IBM Plex Sans', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(col.name, currX + col.w / 2, y + 20);
+      currX += col.w;
+    });
+
+    y += tableHeaderH;
+
+    resultRows.forEach(r => {
+      let x = padding;
+      const vals = [r[0], r[1], r[2], r[3]];
+
+      cols.forEach((col, idx) => {
+        ctx.strokeRect(x, y, col.w, rowH);
+        ctx.font = "12px 'IBM Plex Sans', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(vals[idx], x + col.w / 2, y + 18);
+        x += col.w;
+      });
+      y += rowH;
+    });
+
+    ctx.strokeRect(padding, y, 320, rowH);
+    ctx.font = "bold 12px 'IBM Plex Sans', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText('TOTAL', padding + 160, y + 18);
+
+    ctx.strokeRect(padding + 320, y, 100, rowH);
+    ctx.fillText(totalPickVal, padding + 320 + 50, y + 18);
+
+    const imgX = padding + tableW + 30;
+    const imgY = padding;
+    ctx.drawImage(img, imgX, imgY, imgDisplayW, imgDisplayH);
+
+    const nameSafe = (document.getElementById('estName').value || 'estimasi')
+      .trim().replace(/[^a-z0-9\-_ ]/gi, '_') || 'estimasi';
+    
+    c.toBlob(blob => {
+      downloadBlob(blob, `${nameSafe}_preview.png`, 'image/png');
+    });
+
+  } catch (err) {
+    alert('Gagal mengekspor gambar: ' + err.message);
+  } finally {
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
