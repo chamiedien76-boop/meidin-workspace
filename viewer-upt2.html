@@ -5,7 +5,7 @@
 <title>Viewer UPT / JC5 / EP</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
-  body { background: #f4f6f9; color: #333; padding: 16px; overflow-y: auto; height: 100vh; position: relative; }
+  body { background: #f4f6f9; color: #333; padding: 16px; overflow-y: auto; height: 100vh; }
 
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .toolbar h2 { font-size: 18px; margin-right: 8px; }
@@ -15,18 +15,8 @@
   .btn-primary:hover { background: #1558b0; }
   .btn-secondary { background: #eee; color: #333; }
   .btn-secondary:hover { background: #ddd; }
-  .btn-file { background: #34a853; color: #fff; }
-  .btn-file:hover { background: #2d8e47; }
 
   #status-msg { font-size: 13px; color: #888; margin-bottom: 10px; min-height: 18px; }
-
-  /* Area Petunjuk Drag & Drop */
-  .drop-zone { border: 2px dashed #bbb; border-radius: 8px; padding: 10px; text-align: center; font-size: 13px; color: #666; background: #fff; margin-bottom: 14px; transition: background .2s, border-color .2s; }
-  .drop-zone.dragover { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
-
-  /* Overlay Drag & Drop Layar Penuh */
-  #drag-overlay { display: none; position: fixed; inset: 0; background: rgba(26, 115, 232, 0.85); z-index: 200; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; border: 4px dashed #fff; pointer-events: none; }
-  #drag-overlay.active { display: flex; }
 
   .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .file-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; cursor: pointer; transition: box-shadow .15s, transform .15s; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -57,10 +47,10 @@
   table.color-table th { background: #f4f6f9; }
   .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
-  /* Area Viewer Hitam Pekat & Support Drag Pan */
-  #preview-canvas-wrap { text-align: left; background: #000000; border: 1px solid #333; border-radius: 8px; padding: 10px; overflow: auto; max-height: 420px; cursor: grab; user-select: none; }
-  #preview-canvas-wrap:active { cursor: grabbing; }
-  #preview-canvas-wrap canvas { image-rendering: pixelated; display: block; pointer-events: none; }
+  /* Background area preview diubah menjadi hitam */
+  #preview-canvas-wrap { text-align: left; background: #000000; border: 1px solid #333; border-radius: 8px; padding: 10px; overflow: auto; max-height: 420px; }
+  #preview-canvas-wrap canvas { image-rendering: pixelated; display: block; }
+  #preview-canvas-wrap img { max-width: 100%; max-height: 380px; }
   .zoom-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; }
 
   .loading-line { font-size: 13px; color: #888; padding: 20px; text-align: center; }
@@ -68,25 +58,17 @@
 </head>
 <body>
 
-<div id="drag-overlay">📂 Lepaskan file Pola (UPT / JC5 / EP) di sini</div>
-
 <div class="toolbar">
-  <h2>🧵 Viewer UPT / JC5 / EP</h2>
+  <h2>📁 Viewer UPT / JC5 / EP</h2>
   <div class="folder-path" id="folder-path-label">Belum ada folder dipilih</div>
-  <button class="btn-file" id="btn-pilih-file">📄 Pilih File Pola</button>
-  <button class="btn-primary" id="btn-pilih-folder">📁 Pilih Folder</button>
+  <button class="btn-primary" id="btn-pilih-folder">Pilih Folder</button>
   <button class="btn-secondary" id="btn-refresh">🔄 Refresh</button>
-  <input type="file" id="input-file-manual" accept=".upt,.jc5,.ep,.pat" style="display:none;" />
-</div>
-
-<div class="drop-zone" id="drop-zone">
-  📥 Tarik & lepaskan file UPT, JC5, atau EP ke mana saja di layar ini
 </div>
 
 <div id="status-msg"></div>
 
 <div class="file-grid" id="file-grid"></div>
-<div class="empty-state" id="empty-state" style="display:none;">Belum ada file UPT / JC5 / EP / PAT di folder ini.</div>
+<div class="empty-state" id="empty-state" style="display:none;">Belum ada file EP / UPT / JC5 / gambar / PDF di folder ini.</div>
 
 <!-- MODAL PREVIEW -->
 <div id="modal-overlay">
@@ -152,6 +134,10 @@ const fileBrowserAPI = {
   },
   readFileBase64: async (filePath) => {
     const v = await callBrowserAPI('readFileBase64', filePath);
+    return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
+  },
+  openExternal: async (filePath) => {
+    const v = await callBrowserAPI('openExternal', filePath);
     return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
   }
 };
@@ -330,6 +316,7 @@ function renderThumbnail(canvas, parsed) {
     const rowOffset = y * width;
 
     for (let x = 0; x < width; x++) {
+      // Piksel background diubah dari putih {255, 255, 255} menjadi hitam {0, 0, 0}
       let finalColor = { r: 0, g: 0, b: 0 };
       if (row[x] === 1) {
         const isColorZone = isJC5 ? (x >= 0 && x <= 7) : (x >= idxOra && x <= idxAbu);
@@ -353,14 +340,10 @@ function renderThumbnail(canvas, parsed) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// LOGIKA SCROLL ZOOM & KLIK KIRI GESER (PANNING)
 function attachCanvasZoom(wrap, canvas, naturalWidth, naturalHeight) {
   const wrapWidth = Math.max(wrap.clientWidth - 4, 50);
   let baseScale = Math.min(wrapWidth / naturalWidth, 1) || 1;
   let zoom = 1;
-
-  wrap.style.cursor = 'grab';
-  wrap.style.userSelect = 'none';
 
   function applyZoom() {
     canvas.style.width = (naturalWidth * baseScale * zoom) + 'px';
@@ -369,7 +352,6 @@ function attachCanvasZoom(wrap, canvas, naturalWidth, naturalHeight) {
   canvas.style.imageRendering = 'pixelated';
   applyZoom();
 
-  // 1. Zoom via Scroll Mouse
   wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -387,55 +369,22 @@ function attachCanvasZoom(wrap, canvas, naturalWidth, naturalHeight) {
     wrap.scrollLeft += fracX * (newW - prevW);
     wrap.scrollTop += fracY * (newH - prevH);
 
-    const zoomLabel = document.getElementById('zoom-percent-label');
-    if (zoomLabel) zoomLabel.textContent = Math.round(zoom * baseScale * 100) + '%';
+    document.getElementById('zoom-percent-label').textContent = Math.round(zoom * baseScale * 100) + '%';
   }, { passive: false });
-
-  // 2. Pan (Geser) via Klik Kiri Tahan
-  let isMouseDown = false;
-  let startX = 0, startY = 0;
-  let scrollLeft = 0, scrollTop = 0;
-
-  wrap.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return; // Klik Kiri
-    isMouseDown = true;
-    wrap.style.cursor = 'grabbing';
-    startX = e.pageX - wrap.offsetLeft;
-    startY = e.pageY - wrap.offsetTop;
-    scrollLeft = wrap.scrollLeft;
-    scrollTop = wrap.scrollTop;
-  });
-
-  wrap.addEventListener('mouseleave', () => {
-    isMouseDown = false;
-    wrap.style.cursor = 'grab';
-  });
-
-  wrap.addEventListener('mouseup', () => {
-    isMouseDown = false;
-    wrap.style.cursor = 'grab';
-  });
-
-  wrap.addEventListener('mousemove', (e) => {
-    if (!isMouseDown) return;
-    e.preventDefault();
-    const x = e.pageX - wrap.offsetLeft;
-    const y = e.pageY - wrap.offsetTop;
-    const walkX = (x - startX);
-    const walkY = (y - startY);
-    wrap.scrollLeft = scrollLeft - walkX;
-    wrap.scrollTop = scrollTop - walkY;
-  });
 }
 
 const folderLabel = document.getElementById('folder-path-label');
 const statusMsg = document.getElementById('status-msg');
 const fileGrid = document.getElementById('file-grid');
 const emptyState = document.getElementById('empty-state');
-const inputFileManual = document.getElementById('input-file-manual');
 
 let currentFolder = null;
-const ALLOWED_EXTS = ['.upt', '.jc5', '.ep', '.pat'];
+
+const ICONS = {
+  '.ep': '🧵', '.jc5': '🧵', '.upt': '🧵', '.pat': '🧵',
+  '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.bmp': '🖼️', '.gif': '🖼️', '.webp': '🖼️',
+  '.pdf': '📄'
+};
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -449,18 +398,15 @@ async function loadFolder(folderPath) {
   folderLabel.title = folderPath || '';
   if (!folderPath) { renderFiles([]); return; }
 
-  statusMsg.textContent = 'Memuat daftar file pola...';
+  statusMsg.textContent = 'Memuat daftar file...';
   const res = await fileBrowserAPI.listFiles(folderPath);
   if (!res || !res.success) {
     statusMsg.textContent = 'Gagal membaca folder: ' + (res ? res.error : 'tidak diketahui');
     renderFiles([]);
     return;
   }
-
-  // KHUSUS FILTER FILE POLA SAJA
-  const patternFiles = (res.files || []).filter(f => ALLOWED_EXTS.includes(f.ext ? f.ext.toLowerCase() : ''));
-  statusMsg.textContent = `${patternFiles.length} file pola ditemukan.`;
-  renderFiles(patternFiles);
+  statusMsg.textContent = `${res.files.length} file ditemukan.`;
+  renderFiles(res.files || []);
 }
 
 function renderFiles(files) {
@@ -470,7 +416,7 @@ function renderFiles(files) {
     const card = document.createElement('div');
     card.className = 'file-card';
     card.innerHTML = `
-      <div class="file-icon">🧵</div>
+      <div class="file-icon">${ICONS[f.ext] || '📁'}</div>
       <div class="file-name">${f.name}</div>
       <div class="file-meta">${formatSize(f.size)}</div>
     `;
@@ -478,14 +424,6 @@ function renderFiles(files) {
     fileGrid.appendChild(card);
   }
 }
-
-// PEMILIHAN FILE MANUAL VIA DIALOG
-document.getElementById('btn-pilih-file').addEventListener('click', () => inputFileManual.click());
-
-inputFileManual.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) openPreviewFromFileObject(file);
-});
 
 document.getElementById('btn-pilih-folder').addEventListener('click', async () => {
   const picked = await fileBrowserAPI.selectFolder();
@@ -495,47 +433,6 @@ document.getElementById('btn-pilih-folder').addEventListener('click', async () =
 document.getElementById('btn-refresh').addEventListener('click', () => {
   if (currentFolder) loadFolder(currentFolder);
 });
-
-// EVENT DRAG & DROP
-const dragOverlay = document.getElementById('drag-overlay');
-
-window.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dragOverlay.classList.add('active');
-});
-
-window.addEventListener('dragleave', (e) => {
-  if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-    dragOverlay.classList.remove('active');
-  }
-});
-
-window.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dragOverlay.classList.remove('active');
-  const files = e.dataTransfer.files;
-  if (files.length > 0) {
-    openPreviewFromFileObject(files[0]);
-  }
-});
-
-// BUKA PREVIEW DARI DROP / DIALOG INPUT FILE
-function openPreviewFromFileObject(file) {
-  const ext = '.' + file.name.split('.').pop().toLowerCase();
-  
-  if (!ALLOWED_EXTS.includes(ext)) {
-    alert('Format file tidak didukung! Harap masukkan file .UPT, .JC5, .EP, atau .PAT.');
-    return;
-  }
-
-  const fileObj = { name: file.name, ext: ext, path: file.name, size: file.size };
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const bytes = new Uint8Array(e.target.result);
-    displayPatternModal(fileObj, bytes);
-  };
-  reader.readAsArrayBuffer(file);
-}
 
 const modalOverlay = document.getElementById('modal-overlay');
 const modalTitle = document.getElementById('modal-title');
@@ -556,11 +453,14 @@ function base64ToUint8Array(base64) {
   return bytes;
 }
 
-// BUKA PREVIEW BERDASARKAN SYSTEM PATH DESKTOP
 async function openPreview(file) {
   modalTitle.textContent = file.name;
   modalBody.innerHTML = '<div class="loading-line">Memuat file...</div>';
   modalOverlay.classList.add('active');
+
+  const isImage = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp'].includes(file.ext);
+  const isPdf = file.ext === '.pdf';
+  const isPattern = ['.ep', '.jc5', '.upt', '.pat'].includes(file.ext);
 
   const res = await fileBrowserAPI.readFileBase64(file.path);
   if (!res.success) {
@@ -568,61 +468,78 @@ async function openPreview(file) {
     return;
   }
 
-  try {
-    const bytes = base64ToUint8Array(res.base64);
-    displayPatternModal(file, bytes);
-  } catch (err) {
-    modalBody.innerHTML = `<div class="loading-line">Gagal memproses file pola: ${err.message}</div>`;
+  if (isImage) {
+    const mime = file.ext === '.jpg' ? 'image/jpeg' : `image/${file.ext.slice(1)}`;
+    modalBody.innerHTML = `
+      <div id="preview-canvas-wrap"><img src="data:${mime};base64,${res.base64}"></div>
+    `;
+    return;
   }
-}
 
-function displayPatternModal(file, bytes) {
-  modalTitle.textContent = file.name;
-  modalOverlay.classList.add('active');
-
-  const layout = detectFileLayout(file.name, bytes);
-  const parsed = parsePatternFile(bytes, layout.width, layout.header, layout.isJC5);
-
-  const totalPick = parsed.height;
-  const jumlahWarnaDipakai = parsed.colorCounters.filter(c => c > 0).length;
-
-  let rows = '';
-  for (let i = 0; i < 8; i++) {
-    if (parsed.colorCounters[i] === 0) continue;
-    rows += `<tr>
-      <td><span class="color-dot" style="background:${COLOR_HEX[i]}"></span>${COLOR_NAMES[i]}</td>
-      <td>${parsed.colorCounters[i]}</td>
-    </tr>`;
+  if (isPdf) {
+    modalBody.innerHTML = `
+      <div class="loading-line">Preview PDF langsung belum didukung di sini.</div>
+      <div style="text-align:center;"><button class="btn-primary" id="btn-open-pdf">Buka PDF di Aplikasi Default</button></div>
+    `;
+    document.getElementById('btn-open-pdf').addEventListener('click', async () => {
+      await fileBrowserAPI.openExternal(file.path);
+    });
+    return;
   }
-  if (!rows) rows = '<tr><td colspan="2" style="color:#999;">Tidak ada warna terdeteksi</td></tr>';
 
-  modalBody.innerHTML = `
-    <div class="stats-row">
-      <div class="stat-box"><div class="num">${totalPick}</div><div class="lbl">Total Pick</div></div>
-      <div class="stat-box"><div class="num">${jumlahWarnaDipakai}</div><div class="lbl">Jumlah Benang Dipakai</div></div>
-      <div class="stat-box"><div class="num">${layout.width}</div><div class="lbl">Lebar (Hooks)</div></div>
-      <div class="stat-box"><div class="num">${layout.header}</div><div class="lbl">Header (Byte)</div></div>
-    </div>
-    <table class="color-table">
-      <thead><tr><th>Warna Benang</th><th>Jumlah Pick</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="zoom-toolbar">
-      <span>🔍 Scroll mouse untuk zoom | Klik kiri & tahan untuk geser</span>
-      <span id="zoom-percent-label" style="font-weight:600; margin-left:auto;">100%</span>
-    </div>
-    <div id="preview-canvas-wrap"><canvas id="pattern-canvas"></canvas></div>
-  `;
-  const canvas = document.getElementById('pattern-canvas');
-  renderThumbnail(canvas, parsed);
-  const wrap = document.getElementById('preview-canvas-wrap');
-  attachCanvasZoom(wrap, canvas, parsed.width, parsed.height);
+  if (isPattern) {
+    try {
+      const bytes = base64ToUint8Array(res.base64);
+      const layout = detectFileLayout(file.name, bytes);
+      const parsed = parsePatternFile(bytes, layout.width, layout.header, layout.isJC5);
+
+      const totalPick = parsed.height;
+      const jumlahWarnaDipakai = parsed.colorCounters.filter(c => c > 0).length;
+
+      let rows = '';
+      for (let i = 0; i < 8; i++) {
+        if (parsed.colorCounters[i] === 0) continue;
+        rows += `<tr>
+          <td><span class="color-dot" style="background:${COLOR_HEX[i]}"></span>${COLOR_NAMES[i]}</td>
+          <td>${parsed.colorCounters[i]}</td>
+        </tr>`;
+      }
+      if (!rows) rows = '<tr><td colspan="2" style="color:#999;">Tidak ada warna terdeteksi</td></tr>';
+
+      modalBody.innerHTML = `
+        <div class="stats-row">
+          <div class="stat-box"><div class="num">${totalPick}</div><div class="lbl">Total Pick</div></div>
+          <div class="stat-box"><div class="num">${jumlahWarnaDipakai}</div><div class="lbl">Jumlah Benang Dipakai</div></div>
+          <div class="stat-box"><div class="num">${layout.width}</div><div class="lbl">Lebar (Hooks)</div></div>
+          <div class="stat-box"><div class="num">${layout.header}</div><div class="lbl">Header (Byte)</div></div>
+        </div>
+        <table class="color-table">
+          <thead><tr><th>Warna Benang</th><th>Jumlah Pick</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="zoom-toolbar">
+          <span>🔍 Scroll mouse di gambar untuk zoom</span>
+          <span id="zoom-percent-label" style="font-weight:600; margin-left:auto;">100%</span>
+        </div>
+        <div id="preview-canvas-wrap"><canvas id="pattern-canvas"></canvas></div>
+      `;
+      const canvas = document.getElementById('pattern-canvas');
+      renderThumbnail(canvas, parsed);
+      const wrap = document.getElementById('preview-canvas-wrap');
+      attachCanvasZoom(wrap, canvas, parsed.width, parsed.height);
+    } catch (err) {
+      modalBody.innerHTML = `<div class="loading-line">Gagal memproses file pola: ${err.message}</div>`;
+    }
+    return;
+  }
+
+  modalBody.innerHTML = '<div class="loading-line">Tipe file tidak didukung untuk preview.</div>';
 }
 
 (async function init() {
   const saved = await fileBrowserAPI.getDefaultFolder();
   if (saved) await loadFolder(saved);
-  else statusMsg.textContent = 'Pilih folder, pilih file pola, atau drag & drop file .UPT / .JC5 / .EP ke sini.';
+  else statusMsg.textContent = 'Klik "Pilih Folder" untuk mulai menelusuri file.';
 })();
 </script>
 </body>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>PDF Viewer (Dark Mode, Drop & Pan Support)</title>
+<!-- Load PDF.js Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+  body { background: #f4f6f9; color: #333; padding: 16px; overflow-y: auto; height: 100vh; position: relative; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar h2 { font-size: 18px; margin-right: 8px; }
+  .folder-path { font-size: 12px; color: #666; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 6px 10px; flex: 1; min-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+  .btn-primary { background: #1a73e8; color: #fff; }
+  .btn-primary:hover { background: #1558b0; }
+  .btn-secondary { background: #eee; color: #333; }
+  .btn-secondary:hover { background: #ddd; }
+  .btn-file { background: #34a853; color: #fff; }
+  .btn-file:hover { background: #2d8e47; }
+
+  #status-msg { font-size: 13px; color: #888; margin-bottom: 10px; min-height: 18px; }
+
+  /* Drop Zone Banner */
+  .drop-zone { border: 2px dashed #bbb; border-radius: 8px; padding: 12px; text-align: center; font-size: 13px; color: #666; background: #fff; margin-bottom: 14px; transition: background .2s, border-color .2s; }
+  .drop-zone.dragover { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+
+  .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .file-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; cursor: pointer; transition: box-shadow .15s, transform .15s; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .file-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); transform: translateY(-2px); }
+  .file-icon { font-size: 34px; margin-bottom: 6px; }
+  .file-name { font-size: 12px; font-weight: 600; word-break: break-all; line-height: 1.3; }
+  .file-meta { font-size: 10px; color: #999; margin-top: 4px; }
+
+  .empty-state { text-align: center; color: #999; padding: 40px 20px; font-size: 14px; }
+
+  /* Overlay Drag & Drop Full Screen */
+  #drag-overlay { display: none; position: fixed; inset: 0; background: rgba(26, 115, 232, 0.85); z-index: 200; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; border: 4px dashed #fff; }
+  #drag-overlay.active { display: flex; }
+
+  /* Modal preview */
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  #modal-overlay.active { display: flex; }
+  #modal-box { background: #fff; border-radius: 12px; max-width: 950px; width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+  #modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eee; }
+  #modal-header h3 { font-size: 15px; word-break: break-all; padding-right: 10px; }
+  #modal-close { background: none; font-size: 20px; color: #888; padding: 4px 10px; }
+  #modal-close:hover { color: #333; }
+  #modal-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* Controls PDF */
+  .pdf-controls { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #555; background: #f8f9fa; padding: 8px 12px; border-radius: 8px; border: 1px solid #eee; flex-wrap: wrap; }
+  .pdf-controls .page-nav { display: flex; align-items: center; gap: 6px; }
+  .pdf-controls button { padding: 4px 10px; font-size: 12px; background: #e0e0e0; color: #333; }
+  .pdf-controls button:hover { background: #d0d0d0; }
+
+  /* Background area viewer diubah hitam agar tidak silau */
+  #preview-canvas-wrap { text-align: center; background: #000000; border: 1px solid #333; border-radius: 8px; padding: 14px; overflow: auto; max-height: 520px; cursor: grab; user-select: none; }
+  #preview-canvas-wrap:active { cursor: grabbing; }
+  #preview-canvas-wrap canvas { display: inline-block; box-shadow: 0 4px 16px rgba(0,0,0,0.5); pointer-events: none; }
+  
+  .zoom-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; }
+  .loading-line { font-size: 13px; color: #888; padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="drag-overlay">📂 Lepaskan file PDF di sini untuk langsung melihat</div>
+
+<div class="toolbar">
+  <h2>📄 PDF Viewer</h2>
+  <div class="folder-path" id="folder-path-label">Belum ada folder dipilih</div>
+  <button class="btn-file" id="btn-pilih-file">📄 Pilih File PDF</button>
+  <button class="btn-primary" id="btn-pilih-folder">📁 Pilih Folder</button>
+  <button class="btn-secondary" id="btn-refresh">🔄 Refresh</button>
+  <input type="file" id="input-file-pdf" accept=".pdf" style="display:none;" />
+</div>
+
+<div class="drop-zone" id="drop-zone">
+  📥 Tarik & lepaskan (Drag & Drop) file PDF ke mana saja di layar ini
+</div>
+
+<div id="status-msg"></div>
+
+<div class="file-grid" id="file-grid"></div>
+<div class="empty-state" id="empty-state" style="display:none;">Belum ada file PDF yang ditampilkan.</div>
+
+<!-- MODAL PREVIEW -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-header">
+      <h3 id="modal-title">-</h3>
+      <button id="modal-close">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ============================================================
+// JEMBATAN RPC KE MAIN PROCESS
+// ============================================================
+let rpcCounter = 0;
+const rpcPending = new Map();
+
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'invokeAPIResult') {
+    const pending = rpcPending.get(event.data.requestId);
+    if (pending) {
+      rpcPending.delete(event.data.requestId);
+      pending(event.data.result);
+    }
+  }
+});
+
+function callAPI(api, method, ...args) {
+  return new Promise((resolve) => {
+    if (window.top === window.self) {
+      resolve({ success: false, error: 'Fitur ini hanya berjalan di dalam aplikasi desktop.' });
+      return;
+    }
+    const requestId = 'req_' + (++rpcCounter) + '_' + Date.now();
+    rpcPending.set(requestId, resolve);
+    window.top.postMessage({ action: 'invokeAPI', requestId, api, method, args }, '*');
+    setTimeout(() => {
+      if (rpcPending.has(requestId)) {
+        rpcPending.delete(requestId);
+        resolve({ success: false, error: 'Timeout: tidak ada balasan dari aplikasi utama.' });
+      }
+    }, 15000);
+  });
+}
+
+async function callBrowserAPI(method, ...args) {
+  const envelope = await callAPI('fileBrowserAPI', method, ...args);
+  if (!envelope.success) return { __bridgeFailed: true, error: envelope.error };
+  return envelope.value;
+}
+
+const fileBrowserAPI = {
+  getDefaultFolder: async () => {
+    const v = await callBrowserAPI('getDefaultFolder');
+    return v && v.__bridgeFailed ? null : v;
+  },
+  selectFolder: async () => {
+    const v = await callBrowserAPI('selectFolder');
+    return v && v.__bridgeFailed ? null : v;
+  },
+  listFiles: async (folderPath) => {
+    const v = await callBrowserAPI('listFiles', folderPath);
+    return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
+  },
+  readFileBase64: async (filePath) => {
+    const v = await callBrowserAPI('readFileBase64', filePath);
+    return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
+  }
+};
+
+// ============================================================
+// FITUR ZOOM & PAN (DRAG KLIK KIRI TAHAN) PADA CANVAS PDF
+// ============================================================
+function attachCanvasZoomAndPan(wrap, canvas, naturalWidth, naturalHeight) {
+  const wrapWidth = Math.max(wrap.clientWidth - 28, 50);
+  let baseScale = Math.min(wrapWidth / naturalWidth, 1) || 1;
+  let zoom = 1;
+
+  function applyZoom() {
+    canvas.style.width = (naturalWidth * baseScale * zoom) + 'px';
+    canvas.style.height = (naturalHeight * baseScale * zoom) + 'px';
+  }
+  applyZoom();
+
+  // --- 1. Zoom dengan Mouse Wheel ---
+  wrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const fracX = (e.clientX - rect.left) / rect.width;
+    const fracY = (e.clientY - rect.top) / rect.height;
+    const prevW = canvas.getBoundingClientRect().width;
+    const prevH = canvas.getBoundingClientRect().height;
+
+    const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+    zoom = Math.min(Math.max(zoom * factor, 0.2), 15);
+    applyZoom();
+
+    const newW = canvas.getBoundingClientRect().width;
+    const newH = canvas.getBoundingClientRect().height;
+    wrap.scrollLeft += fracX * (newW - prevW);
+    wrap.scrollTop += fracY * (newH - prevH);
+
+    const zoomLabel = document.getElementById('zoom-percent-label');
+    if (zoomLabel) zoomLabel.textContent = Math.round(zoom * baseScale * 100) + '%';
+  }, { passive: false });
+
+  // --- 2. Drag & Pan dengan Klik Kiri Tahan ---
+  let isMouseDown = false;
+  let startX = 0;
+  let startY = 0;
+  let scrollLeft = 0;
+  let scrollTop = 0;
+
+  wrap.addEventListener('mousedown', (e) => {
+    // Hanya respon klik kiri (button 0)
+    if (e.button !== 0) return;
+    isMouseDown = true;
+    startX = e.pageX - wrap.offsetLeft;
+    startY = e.pageY - wrap.offsetTop;
+    scrollLeft = wrap.scrollLeft;
+    scrollTop = wrap.scrollTop;
+  });
+
+  wrap.addEventListener('mouseleave', () => {
+    isMouseDown = false;
+  });
+
+  wrap.addEventListener('mouseup', () => {
+    isMouseDown = false;
+  });
+
+  wrap.addEventListener('mousemove', (e) => {
+    if (!isMouseDown) return;
+    e.preventDefault();
+    const x = e.pageX - wrap.offsetLeft;
+    const y = e.pageY - wrap.offsetTop;
+    const walkX = (x - startX);
+    const walkY = (y - startY);
+    wrap.scrollLeft = scrollLeft - walkX;
+    wrap.scrollTop = scrollTop - walkY;
+  });
+}
+
+// ============================================================
+// UI: FOLDER & FILE GRID
+// ============================================================
+const folderLabel = document.getElementById('folder-path-label');
+const statusMsg = document.getElementById('status-msg');
+const fileGrid = document.getElementById('file-grid');
+const emptyState = document.getElementById('empty-state');
+const inputFilePdf = document.getElementById('input-file-pdf');
+
+let currentFolder = null;
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function loadFolder(folderPath) {
+  currentFolder = folderPath;
+  folderLabel.textContent = folderPath || 'Belum ada folder dipilih';
+  folderLabel.title = folderPath || '';
+  if (!folderPath) { renderFiles([]); return; }
+
+  statusMsg.textContent = 'Memuat daftar file PDF...';
+  const res = await fileBrowserAPI.listFiles(folderPath);
+  if (!res || !res.success) {
+    statusMsg.textContent = 'Gagal membaca folder: ' + (res ? res.error : 'tidak diketahui');
+    renderFiles([]);
+    return;
+  }
+  
+  const pdfFiles = (res.files || []).filter(f => f.ext === '.pdf');
+  statusMsg.textContent = `${pdfFiles.length} file PDF ditemukan.`;
+  renderFiles(pdfFiles);
+}
+
+function renderFiles(files) {
+  fileGrid.innerHTML = '';
+  emptyState.style.display = files.length === 0 ? 'block' : 'none';
+  for (const f of files) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.innerHTML = `
+      <div class="file-icon">📄</div>
+      <div class="file-name">${f.name}</div>
+      <div class="file-meta">${formatSize(f.size)}</div>
+    `;
+    card.addEventListener('click', () => openPdfFromPath(f.path, f.name));
+    fileGrid.appendChild(card);
+  }
+}
+
+// Tombol Pilih File tunggal
+document.getElementById('btn-pilih-file').addEventListener('click', () => {
+  inputFilePdf.click();
+});
+
+inputFilePdf.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file && file.type === "application/pdf") {
+    openPdfFromFileObject(file);
+  }
+});
+
+// Tombol Pilih Folder & Refresh
+document.getElementById('btn-pilih-folder').addEventListener('click', async () => {
+  const picked = await fileBrowserAPI.selectFolder();
+  if (picked) await loadFolder(picked);
+});
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  if (currentFolder) loadFolder(currentFolder);
+});
+
+// ============================================================
+// DRAG & DROP HANDLING
+// ============================================================
+const dragOverlay = document.getElementById('drag-overlay');
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dragOverlay.classList.add('active');
+});
+
+window.addEventListener('dragleave', (e) => {
+  if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+    dragOverlay.classList.remove('active');
+  }
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragOverlay.classList.remove('active');
+  
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    const file = files[0];
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      openPdfFromFileObject(file);
+    } else {
+      alert('File yang di-drop harus berformat PDF!');
+    }
+  }
+});
+
+// ============================================================
+// MODAL & RENDER PDF
+// ============================================================
+const modalOverlay = document.getElementById('modal-overlay');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+function closeModal() {
+  modalOverlay.classList.remove('active');
+  modalBody.innerHTML = '';
+}
+
+function base64ToUint8Array(base64) {
+  const binStr = atob(base64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return bytes;
+}
+
+// Buka PDF dari Path (RPC Backend)
+async function openPdfFromPath(filePath, fileName) {
+  modalTitle.textContent = fileName;
+  modalBody.innerHTML = '<div class="loading-line">Membuat halaman PDF...</div>';
+  modalOverlay.classList.add('active');
+
+  const res = await fileBrowserAPI.readFileBase64(filePath);
+  if (!res.success) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal membaca file: ${res.error}</div>`;
+    return;
+  }
+  const bytes = base64ToUint8Array(res.base64);
+  renderPdfData(bytes);
+}
+
+// Buka PDF langsung dari Drop / Input File (ArrayBuffer)
+function openPdfFromFileObject(file) {
+  modalTitle.textContent = file.name;
+  modalBody.innerHTML = '<div class="loading-line">Membuat halaman PDF...</div>';
+  modalOverlay.classList.add('active');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const bytes = new Uint8Array(e.target.result);
+    renderPdfData(bytes);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Fungsi utama render data PDF
+async function renderPdfData(bytes) {
+  try {
+    const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+    let currentPageNum = 1;
+    const totalPages = pdfDoc.numPages;
+
+    modalBody.innerHTML = `
+      <div class="pdf-controls">
+        <div class="page-nav">
+          <button id="btn-prev-page">◀ Prev</button>
+          <span>Halaman <strong id="pdf-page-num">1</strong> / <strong>${totalPages}</strong></span>
+          <button id="btn-next-page">Next ▶</button>
+        </div>
+        <div class="zoom-toolbar" style="margin-left:auto;">
+          <span>🔍 Scroll mouse untuk zoom | Klik kiri & tahan untuk geser</span>
+          <span id="zoom-percent-label" style="font-weight:600; margin-left:8px;">100%</span>
+        </div>
+      </div>
+      <div id="preview-canvas-wrap">
+        <canvas id="pdf-canvas"></canvas>
+      </div>
+    `;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const wrap = document.getElementById('preview-canvas-wrap');
+
+    async function renderPage(pageNum) {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 });
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      const renderContext = { canvasContext: ctx, viewport: viewport };
+      await page.render(renderContext).promise;
+
+      document.getElementById('pdf-page-num').textContent = pageNum;
+      attachCanvasZoomAndPan(wrap, canvas, viewport.width, viewport.height);
+    }
+
+    await renderPage(currentPageNum);
+
+    document.getElementById('btn-prev-page').addEventListener('click', () => {
+      if (currentPageNum <= 1) return;
+      currentPageNum--;
+      renderPage(currentPageNum);
+    });
+
+    document.getElementById('btn-next-page').addEventListener('click', () => {
+      if (currentPageNum >= totalPages) return;
+      currentPageNum++;
+      renderPage(currentPageNum);
+    });
+
+  } catch (err) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal merender file PDF: ${err.message}</div>`;
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(async function init() {
+  const saved = await fileBrowserAPI.getDefaultFolder();
+  if (saved) await loadFolder(saved);
+  else statusMsg.textContent = 'Pilih file PDF, pilih folder, atau drop file di sini.';
+})();
+</script>
+</body>
+</html>
