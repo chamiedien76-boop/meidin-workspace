@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Viewer PDF & Image</title>
-<!-- Engine PDF.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
@@ -71,7 +70,9 @@
   <button class="btn-file" id="btn-pilih-file">📂 Buka File</button>
   <button class="btn-primary" id="btn-pilih-folder">📁 Pilih Folder</button>
   <button class="btn-secondary" id="btn-refresh">🔄 Refresh</button>
+
   <input type="file" id="input-file-manual" accept=".pdf,.jpg,.jpeg,.png,.bmp,.gif,.webp,.tiff,.svg" style="display:none;" />
+  <input type="file" id="input-folder-manual" webkitdirectory directory multiple style="display:none;" />
 </div>
 
 <div class="drop-zone">
@@ -83,7 +84,6 @@
 <div class="file-grid" id="file-grid"></div>
 <div class="empty-state" id="empty-state" style="display:none;">Tidak ada file PDF atau Gambar di folder ini.</div>
 
-<!-- MODAL PREVIEW -->
 <div id="modal-overlay">
   <div id="modal-box">
     <div id="modal-header">
@@ -96,7 +96,7 @@
         <button class="btn-secondary" id="btn-zoom-out">➖ Zoom -</button>
         <span id="zoom-percent-label" style="font-weight:600;">100%</span>
         <button class="btn-secondary" id="btn-zoom-in">➕ Zoom +</button>
-        <button class="btn-secondary" id="btn-zoom-reset">↩️ Reset</button>
+        <button class="btn-zoom-reset" id="btn-zoom-reset">↩️ Reset</button>
       </div>
 
       <div id="preview-viewport">
@@ -171,6 +171,7 @@ const statusMsg = document.getElementById('status-msg');
 const fileGrid = document.getElementById('file-grid');
 const emptyState = document.getElementById('empty-state');
 const inputFileManual = document.getElementById('input-file-manual');
+const inputFolderManual = document.getElementById('input-folder-manual');
 
 let currentFolder = null;
 
@@ -227,11 +228,16 @@ function renderFiles(files) {
   }
 }
 
-// BUKA PREVIEW BERDASARKAN SYSTEM PATH
+// BUKA PREVIEW BERDASARKAN SYSTEM PATH ATAU RAW FILE BROWSER
 async function openPreview(file) {
   modalTitle.textContent = file.name;
   previewContainer.innerHTML = '<div class="loading-line" style="color:#fff;">Memuat berkas...</div>';
   modalOverlay.classList.add('active');
+
+  if (file.rawFile) {
+    openPreviewFromFileObject(file.rawFile);
+    return;
+  }
 
   const res = await fileBrowserAPI.readFileBase64(file.path);
   if (!res.success) {
@@ -389,9 +395,41 @@ inputFileManual.addEventListener('change', (e) => {
   if (e.target.files[0]) openPreviewFromFileObject(e.target.files[0]);
 });
 
+// PEMILIHAN FOLDER (HYBRID DESKTOP / WEB GITHUB PAGES)
 document.getElementById('btn-pilih-folder').addEventListener('click', async () => {
   const picked = await fileBrowserAPI.selectFolder();
-  if (picked) await loadFolder(picked);
+  if (picked) {
+    await loadFolder(picked);
+  } else {
+    // Fallback untuk Browser Web / GitHub Pages jika API Electron tidak ada
+    inputFolderManual.click();
+  }
+});
+
+inputFolderManual.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (!files || files.length === 0) return;
+
+  const firstPath = files[0].webkitRelativePath || '';
+  const folderName = firstPath.split('/')[0] || 'Folder Web';
+
+  currentFolder = folderName;
+  folderLabel.textContent = folderName;
+  folderLabel.title = folderName;
+
+  const allowedFiles = files.filter(f => {
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    return PDF_EXTS.includes(ext) || IMAGE_EXTS.includes(ext);
+  }).map(f => ({
+    name: f.name,
+    ext: '.' + f.name.split('.').pop().toLowerCase(),
+    path: f.webkitRelativePath || f.name,
+    size: f.size,
+    rawFile: f
+  }));
+
+  statusMsg.textContent = `${allowedFiles.length} berkas ditemukan.`;
+  renderFiles(allowedFiles);
 });
 
 document.getElementById('btn-refresh').addEventListener('click', () => {

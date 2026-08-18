@@ -76,7 +76,9 @@
   <button class="btn-file" id="btn-pilih-file">📄 Pilih File Pola</button>
   <button class="btn-primary" id="btn-pilih-folder">📁 Pilih Folder</button>
   <button class="btn-secondary" id="btn-refresh">🔄 Refresh</button>
+
   <input type="file" id="input-file-manual" accept=".upt,.jc5,.ep,.pat" style="display:none;" />
+  <input type="file" id="input-folder-manual" webkitdirectory directory multiple style="display:none;" />
 </div>
 
 <div class="drop-zone" id="drop-zone">
@@ -88,7 +90,6 @@
 <div class="file-grid" id="file-grid"></div>
 <div class="empty-state" id="empty-state" style="display:none;">Belum ada file UPT / JC5 / EP / PAT di folder ini.</div>
 
-<!-- MODAL PREVIEW -->
 <div id="modal-overlay">
   <div id="modal-box">
     <div id="modal-header">
@@ -433,6 +434,7 @@ const statusMsg = document.getElementById('status-msg');
 const fileGrid = document.getElementById('file-grid');
 const emptyState = document.getElementById('empty-state');
 const inputFileManual = document.getElementById('input-file-manual');
+const inputFolderManual = document.getElementById('input-folder-manual');
 
 let currentFolder = null;
 const ALLOWED_EXTS = ['.upt', '.jc5', '.ep', '.pat'];
@@ -487,9 +489,41 @@ inputFileManual.addEventListener('change', (e) => {
   if (file) openPreviewFromFileObject(file);
 });
 
+// PEMILIHAN FOLDER (HYBRID DESKTOP / WEB GITHUB PAGES)
 document.getElementById('btn-pilih-folder').addEventListener('click', async () => {
   const picked = await fileBrowserAPI.selectFolder();
-  if (picked) await loadFolder(picked);
+  if (picked) {
+    await loadFolder(picked);
+  } else {
+    // Fallback untuk Browser Web / GitHub Pages
+    inputFolderManual.click();
+  }
+});
+
+inputFolderManual.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (!files || files.length === 0) return;
+
+  const firstPath = files[0].webkitRelativePath || '';
+  const folderName = firstPath.split('/')[0] || 'Folder Web';
+  
+  currentFolder = folderName;
+  folderLabel.textContent = folderName;
+  folderLabel.title = folderName;
+
+  const patternFiles = files.filter(f => {
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    return ALLOWED_EXTS.includes(ext);
+  }).map(f => ({
+    name: f.name,
+    ext: '.' + f.name.split('.').pop().toLowerCase(),
+    path: f.webkitRelativePath || f.name,
+    size: f.size,
+    rawFile: f
+  }));
+
+  statusMsg.textContent = `${patternFiles.length} file pola ditemukan.`;
+  renderFiles(patternFiles);
 });
 
 document.getElementById('btn-refresh').addEventListener('click', () => {
@@ -556,11 +590,16 @@ function base64ToUint8Array(base64) {
   return bytes;
 }
 
-// BUKA PREVIEW BERDASARKAN SYSTEM PATH DESKTOP
+// BUKA PREVIEW BERDASARKAN SYSTEM PATH DESKTOP ATAU RAW FILE BROWSER
 async function openPreview(file) {
   modalTitle.textContent = file.name;
   modalBody.innerHTML = '<div class="loading-line">Memuat file...</div>';
   modalOverlay.classList.add('active');
+
+  if (file.rawFile) {
+    openPreviewFromFileObject(file.rawFile);
+    return;
+  }
 
   const res = await fileBrowserAPI.readFileBase64(file.path);
   if (!res.success) {
