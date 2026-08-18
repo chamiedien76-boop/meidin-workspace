@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Meidin Workspace</title>
+
   <link rel="icon" type="image/png" href="./logo-meidin.png">
   <style>
     /* Reset CSS dasar */
@@ -231,10 +232,10 @@
           <a class="nav-link" onclick="openPage('appProsesGambar', this)">✏️ Proses Gambar</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appPdfviewer', this)">📊 PDF Viewer</a>
+          <a class="nav-link" onclick="openPage('appEstimasiPick', this)">📊 Estimasi Pick</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appViewerUpt', this)">👁️ UPT Viewer</a>
+          <a class="nav-link" onclick="openPage('appViewerUpt', this)">👁️ Viewer UPT</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" onclick="openPage('appMasterFile', this)">📁 Master File Upload</a>
@@ -248,7 +249,7 @@
       <iframe id="appProduction" class="app-frame" data-src="./production.html"></iframe>
       <iframe id="appLabel" class="app-frame" data-src="./label.html"></iframe>
       <iframe id="appProsesGambar" class="app-frame" data-src="./x.html"></iframe>
-      <iframe id="appPdfviewer" class="app-frame" data-src="./pdf-viewer.html"></iframe>
+      <iframe id="appEstimasiPick" class="app-frame" data-src="./x.html"></iframe>
       <iframe id="appViewerUpt" class="app-frame" data-src="./viewer-upt.html"></iframe>
       <iframe id="appMasterFile" class="app-frame" data-src="./x.html"></iframe>
     </main>
@@ -305,25 +306,6 @@ window.addEventListener('message', async function(event) {
       // Fallback jika dibuka di browser biasa tanpa Electron
       window.print();
     }
-  }
-
-  // 3. Jembatan umum (RPC) supaya iframe (mis. viewer-upt.html) bisa memanggil
-  // API apa pun yang di-expose lewat preload.js (window.electronAPI, window.fileBrowserAPI, dst),
-  // karena iframe TIDAK punya akses langsung ke API tersebut (cuma window utama yang punya).
-  if (event.data.action === 'invokeAPI') {
-    const { requestId, api, method, args } = event.data;
-    let result;
-    try {
-      const target = window[api];
-      if (!target || typeof target[method] !== 'function') {
-        throw new Error(`API ${api}.${method} tidak tersedia (bukan Electron atau preload belum siap)`);
-      }
-      const value = await target[method](...(args || []));
-      result = { success: true, value };
-    } catch (err) {
-      result = { success: false, error: err.message };
-    }
-    event.source.postMessage({ action: 'invokeAPIResult', requestId, result }, '*');
   }
 });
   </script>
