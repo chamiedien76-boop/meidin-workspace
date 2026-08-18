@@ -401,11 +401,12 @@ document.getElementById('btn-pilih-folder').addEventListener('click', async () =
   if (picked) {
     await loadFolder(picked);
   } else {
-    // Fallback untuk Browser Web / GitHub Pages jika API Electron tidak ada
+    // Fallback otomatis jika di browser / GitHub Pages
     inputFolderManual.click();
   }
 });
 
+// PENGOLAHAN FOLDER DARI INPUT BROWSER (WEBKITDIRECTORY)
 inputFolderManual.addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
   if (!files || files.length === 0) return;
