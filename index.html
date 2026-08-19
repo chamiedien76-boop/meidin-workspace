@@ -257,7 +257,6 @@
   <script>
     // FUNGSI NAVIGASI PINDAH HALAMAN
     function openPage(iframeId, element) {
-      // 1. Sembunyikan semua iframe
       document.querySelectorAll('.app-frame').forEach(frame => {
         frame.classList.remove('active');
       });
@@ -265,67 +264,101 @@
       const targetFrame = document.getElementById(iframeId);
 
       if (targetFrame) {
-        // Ambil data-src atau src
         const targetFile = targetFrame.getAttribute('data-src') || targetFrame.getAttribute('src');
 
-        // Load src secara lazily jika belum diisi
         if (!targetFrame.src || targetFrame.src === 'about:blank' || targetFrame.src.endsWith('about:blank')) {
           targetFrame.src = targetFile;
         }
 
-        // Tampilkan frame target
         targetFrame.classList.add('active');
       }
 
-      // 2. Highlight tombol menu yang aktif
       if (element) {
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
         element.classList.add('active');
       }
     }
 
-    // LISTENER PESAN DARI IFRAME (UNTUK NAVIGASI & PRINT ELECTRON)
-window.addEventListener('message', async function(event) {
-  if (!event.data) return;
+    // LISTENER PESAN DARI IFRAME (TERMASUK UNTUK UNDUH FILE NATIVE)
+    window.addEventListener('message', async function(event) {
+      if (!event.data) return;
 
-  // 1. Pindah Halaman
-  if (event.data.action === 'openPage') {
-    const targetId = event.data.target;
-    const targetLink = document.querySelector(`.nav-link[onclick*="${targetId}"]`);
-    openPage(targetId, targetLink);
-  }
-
-  // 2. Trigger Print PDF dari Iframe ke Electron Main
-  if (event.data.action === 'printToPDF') {
-    if (window.electronAPI && window.electronAPI.printToPDF) {
-      const result = await window.electronAPI.printToPDF(event.data.options || {});
-      // Kirim balik balasan ke iframe jika diperlukan
-      event.source.postMessage({ action: 'printResult', result: result }, '*');
-    } else {
-      // Fallback jika dibuka di browser biasa tanpa Electron
-      window.print();
-    }
-  }
-
-  // 3. Jembatan umum (RPC) supaya iframe (mis. viewer-upt.html) bisa memanggil
-  // API apa pun yang di-expose lewat preload.js (window.electronAPI, window.fileBrowserAPI, dst),
-  // karena iframe TIDAK punya akses langsung ke API tersebut (cuma window utama yang punya).
-  if (event.data.action === 'invokeAPI') {
-    const { requestId, api, method, args } = event.data;
-    let result;
-    try {
-      const target = window[api];
-      if (!target || typeof target[method] !== 'function') {
-        throw new Error(`API ${api}.${method} tidak tersedia (bukan Electron atau preload belum siap)`);
+      // 1. Pindah Halaman
+      if (event.data.action === 'openPage') {
+        const targetId = event.data.target;
+        const targetLink = document.querySelector(`.nav-link[onclick*="${targetId}"]`);
+        openPage(targetId, targetLink);
       }
-      const value = await target[method](...(args || []));
-      result = { success: true, value };
-    } catch (err) {
-      result = { success: false, error: err.message };
-    }
-    event.source.postMessage({ action: 'invokeAPIResult', requestId, result }, '*');
-  }
-});
+
+      // 2. SIMPAN FILE DARI IFRAME KE APK NATIVE (CAPACITOR) / ELECTRON / WEB
+      if (event.data.action === 'saveFile') {
+        const { filename, base64Data, requestId } = event.data;
+        
+        try {
+          // Cek jika berjalan di Capacitor APK
+          const CapacitorObj = window.Capacitor || (window.parent && window.parent.Capacitor);
+          if (CapacitorObj && CapacitorObj.Plugins && CapacitorObj.Plugins.Filesystem) {
+            await CapacitorObj.Plugins.Filesystem.writeFile({
+              path: filename,
+              data: base64Data,
+              directory: 'DOCUMENTS',
+              recursive: true
+            });
+            
+            alert('File berhasil disimpan ke folder Documents: ' + filename);
+            if (event.source) event.source.postMessage({ action: 'saveFileResult', requestId, result: { success: true } }, '*');
+            return;
+          }
+
+          // Cek jika berjalan di Electron
+          if (window.electronAPI && window.electronAPI.saveFile) {
+            const res = await window.electronAPI.saveFile({ filename, base64Data });
+            if (event.source) event.source.postMessage({ action: 'saveFileResult', requestId, result: res }, '*');
+            return;
+          }
+
+          // Fallback Web Browser biasa
+          const a = document.createElement('a');
+          a.href = base64Data.startsWith('data:') ? base64Data : 'data:application/octet-stream;base64,' + base64Data;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          if (event.source) event.source.postMessage({ action: 'saveFileResult', requestId, result: { success: true } }, '*');
+
+        } catch (err) {
+          alert('Gagal menyimpan file: ' + err.message);
+          if (event.source) event.source.postMessage({ action: 'saveFileResult', requestId, result: { success: false, error: err.message } }, '*');
+        }
+      }
+
+      // 3. Trigger Print PDF dari Iframe
+      if (event.data.action === 'printToPDF') {
+        if (window.electronAPI && window.electronAPI.printToPDF) {
+          const result = await window.electronAPI.printToPDF(event.data.options || {});
+          if (event.source) event.source.postMessage({ action: 'printResult', result: result }, '*');
+        } else {
+          window.print();
+        }
+      }
+
+      // 4. Jembatan RPC umum
+      if (event.data.action === 'invokeAPI') {
+        const { requestId, api, method, args } = event.data;
+        let result;
+        try {
+          const target = window[api];
+          if (!target || typeof target[method] !== 'function') {
+            throw new Error(`API ${api}.${method} tidak tersedia`);
+          }
+          const value = await target[method](...(args || []));
+          result = { success: true, value };
+        } catch (err) {
+          result = { success: false, error: err.message };
+        }
+        if (event.source) event.source.postMessage({ action: 'invokeAPIResult', requestId, result }, '*');
+      }
+    });
   </script>
 
 </body>
