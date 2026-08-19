@@ -167,6 +167,7 @@
             padding-left: 4px;
             width: 98%;
         }
+        .prod-table tr.warna-row-hidden { display: none; }
 
         #drop-zone {
             height: 60px;
@@ -537,6 +538,22 @@
                     </thead>
                     <tbody id="prod-tbody"></tbody>
                 </table>
+                <datalist id="daftar-warna-benang">
+                    <option value="Hitam">
+                    <option value="Putih">
+                    <option value="Merah">
+                    <option value="Biru">
+                    <option value="Hijau">
+                    <option value="Kuning">
+                    <option value="Abu">
+                    <option value="Pink">
+                    <option value="Cream">
+                    <option value="Orange">
+                    <option value="Maroon">
+                    <option value="Navy">
+                    <option value="Silver">
+                    <option value="Gold">
+                </datalist>
             </div>
 
             <div class="photo-preview-box" id="photo-preview-box">
@@ -620,18 +637,56 @@
         let panStartX = 0, panStartY = 0;
         let scrollStartX = 0, scrollStartY = 0;
 
+        // Urutan & warna ini HARUS sama persis dengan urutan activeColorIndex di drawMatrixToCanvas()
+        // (0=Abu-abu, 1=Merah, 2=Hijau, 3=Kuning, 4=Biru, 5=Biru Muda, 6=Pink, 7=Oranye)
+        const THREAD_COLORS = [
+            { name: 'Abu-abu',   hex: '#808080' },
+            { name: 'Merah',     hex: '#ff0000' },
+            { name: 'Hijau',     hex: '#00dc00' },
+            { name: 'Kuning',    hex: '#e6be00' },
+            { name: 'Biru',      hex: '#0064ff' },
+            { name: 'Biru Muda', hex: '#00c8ff' },
+            { name: 'Pink',      hex: '#ff69b4' },
+            { name: 'Oranye',    hex: '#ff8c00' }
+        ];
+
         const tbody = document.getElementById('prod-tbody');
         for(let i=1; i<=8; i++) {
             const tr = document.createElement('tr');
+            tr.id = `prod-row-${i}`;
+            tr.classList.add('warna-row-hidden'); // sembunyikan dulu sampai ada file yang dibaca
+            const tc = THREAD_COLORS[i-1];
             tr.innerHTML = `
                 <td><strong>${i}</strong></td>
-                <td><input type="text" id="warna-${i}" class="warna-input"></td>
+                <td>
+                    <input type="text" id="warna-${i}" class="warna-input" placeholder="${tc.name}" list="daftar-warna-benang" autocomplete="off">
+                </td>
                 <td id="picks-${i}" style="font-weight: bold;">0</td>
                 <td><input type="text" id="merk-${i}"></td>
                 <td><input type="text" id="nowarna-${i}"></td>
                 <td><input type="text" id="denier-${i}"></td>
             `;
             tbody.appendChild(tr);
+        }
+
+        // Tampilkan/sembunyikan baris warna sesuai apakah warna itu benar-benar
+        // terbaca (punya pick > 0) di file pola yang sedang dibuka, dan isi
+        // nama warna otomatis kalau kolom "Warna Benang" masih kosong.
+        function updateProdTableVisibility(colorCounters) {
+            for (let i = 1; i <= 8; i++) {
+                const tr = document.getElementById(`prod-row-${i}`);
+                const pickCell = document.getElementById(`picks-${i}`);
+                const warnaInput = document.getElementById(`warna-${i}`);
+                const count = colorCounters[i-1] || 0;
+                const hasPicks = count > 0;
+
+                if (pickCell) pickCell.innerText = count;
+                if (tr) tr.classList.toggle('warna-row-hidden', !hasPicks);
+
+                if (hasPicks && warnaInput && warnaInput.value.trim() === '') {
+                    warnaInput.value = THREAD_COLORS[i-1].name;
+                }
+            }
         }
 
         const HEADER_OPTIONS_BY_WIDTH = {
@@ -1501,7 +1556,7 @@
                 ctx.restore();
             }
 
-            for(let i=1; i<=8; i++) { document.getElementById(`picks-${i}`).innerText = colorCounters[i-1]; }
+            updateProdTableVisibility(colorCounters);
         }
 
         async function cetakLembarKontrol() {
@@ -1573,12 +1628,60 @@
             setTimeout(bersihkanSetelahCetak, 5000);
         }
 
+        // Fungsi Helper untuk download file yang kompatibel di dalam iframe (WebView Android)
+        // Sama seperti label.html: kirim base64 ke parent lewat postMessage, karena
+        // a.click() dengan blob-URL sering diblokir/gagal di WebView Android saat ada di dalam iframe.
+        function triggerDownload(blob, fileName) {
+            const mimeType = blob.type || "application/octet-stream";
+            const reader = new FileReader();
+
+            reader.onloadend = function () {
+                const dataUrl = reader.result; // Full Data URL (base64)
+                const isInsideIframe = window.parent && window.parent !== window;
+
+                if (isInsideIframe) {
+                    window.parent.postMessage({
+                        action: 'saveFile',
+                        filename: fileName,
+                        base64Data: dataUrl,
+                        mimeType: mimeType,
+                        requestId: Date.now()
+                    }, '*');
+                    return;
+                }
+
+                // Fallback jika production.html dibuka langsung (bukan di dalam iframe)
+                try {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = fileName;
+                    a.style.display = "none";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (err) {
+                    alert('Gagal mengunduh file: ' + err.message);
+                }
+            };
+
+            reader.readAsDataURL(blob);
+        }
+
         async function saveModifiedFile() {
             if (!fileData || bitMatrix.length === 0) { alert("Silakan masukkan file terlebih dahulu!"); return; }
-            let newFileData = new Uint8Array(fileData.length);
-            newFileData.set(fileData);
+            
+            // Hitung total panjang byte baru (Offset + jumlah baris x byte per baris)
+            const requiredDataLength = currentOffset + (currentHeight * currentBytesPerLine);
+            const totalRequiredLength = Math.max(fileData.length, requiredDataLength);
+            
+            let newFileData = new Uint8Array(totalRequiredLength);
+            
+            // Salin header asli
+            newFileData.set(fileData.subarray(0, Math.min(fileData.length, currentOffset)));
+            
             let currentByteIdx = currentOffset;
-
             for (let y = 0; y < currentHeight; y++) {
                 let rowBits = bitMatrix[y];
                 for (let b = 0; b < currentBytesPerLine; b++) {
@@ -1592,6 +1695,11 @@
                 currentByteIdx += currentBytesPerLine;
             }
 
+            // Jika ada sisa data di belakang file asli yang melebihi matrix, salin juga
+            if (fileData.length > currentByteIdx) {
+                newFileData.set(fileData.subarray(currentByteIdx), currentByteIdx);
+            }
+
             const dotIdx = originalFileName.lastIndexOf('.');
             const ext = dotIdx > -1 ? originalFileName.substring(dotIdx) : (isJC5 ? ".JC5" : ".UPT");
             let defaultBaseName = dotIdx > -1 ? originalFileName.substring(0, dotIdx) : originalFileName;
@@ -1600,11 +1708,13 @@
             const typedName = await customPrompt("Simpan sebagai (nama file, tanpa ekstensi " + ext + "):", defaultBaseName);
             if (typedName === null) return;
             const baseName = typedName.trim() === "" ? defaultBaseName : typedName.trim();
+            const fullFileName = baseName + ext;
 
             const blob = new Blob([newFileData], { type: "application/octet-stream" });
-            const link = document.createElement("a");
-            link.download = baseName + ext;
-            link.href = URL.createObjectURL(blob); link.click();
+            triggerDownload(blob, fullFileName);
+            
+            statusDetected.innerText = `Status: File berhasil disimpan [ ${fullFileName} ]`;
+            statusDetected.style.color = "#27ae60";
         }
 
         function bytesToBase64(bytes) {
@@ -1722,14 +1832,12 @@
             const typedName = await customPrompt("Simpan data order sebagai (nama file, tanpa ekstensi .json):", defaultBaseName);
             if (typedName === null) return;
             const baseName = typedName.trim() === "" ? defaultBaseName : typedName.trim();
+            const fullFileName = baseName + ".json";
 
             const blob = new Blob([JSON.stringify(orderData)], { type: "application/json" });
-            const link = document.createElement("a");
-            link.download = baseName + ".json";
-            link.href = URL.createObjectURL(blob);
-            link.click();
+            triggerDownload(blob, fullFileName);
 
-            statusDetected.innerText = `Status: Data order berhasil disimpan [ ${link.download} ]`;
+            statusDetected.innerText = `Status: Data order berhasil disimpan [ ${fullFileName} ]`;
             statusDetected.style.color = "#8e44ad";
         }
 
