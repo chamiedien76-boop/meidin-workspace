@@ -2,20 +2,21 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Master File Upload — Folder Design</title>
+<title>Master File Upload</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-  body { background: #ffffff; color: #333; padding: 24px; overflow-y: auto; height: 100vh; position: relative; }
+  body { background: #ffffff; color: #333; padding: 16px; overflow-y: auto; height: 100vh; position: relative; font-size: 11px; }
 
   /* Header & Title */
-  .page-title { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; color: #1a73e8; margin-bottom: 20px; }
-  .page-title span.folder-icon { font-size: 24px; }
+  .page-title { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; color: #1a73e8; margin-bottom: 14px; }
+  .page-title span.folder-icon { font-size: 18px; }
 
   /* Toolbar Actions */
-  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   
-  button { cursor: pointer; border: 1px solid #dcdfe6; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #333; transition: all .2s; }
+  button { cursor: pointer; border: 1px solid #dcdfe6; border-radius: 4px; padding: 5px 10px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: #fff; color: #333; transition: all .2s; }
   button:hover { background: #f5f7fa; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-upload-file { background: #00875a; color: #fff; border: none; }
   .btn-upload-file:hover { background: #006c48; }
@@ -23,57 +24,65 @@
   .btn-dropdown { background: #f0f0f0; border: none; color: #333; }
 
   .search-box { margin-left: auto; position: relative; display: flex; align-items: center; }
-  .search-box input { border: 1px solid #dcdfe6; border-radius: 6px; padding: 8px 12px 8px 30px; font-size: 13px; outline: none; width: 180px; }
+  .search-box input { border: 1px solid #dcdfe6; border-radius: 4px; padding: 5px 10px 5px 26px; font-size: 11px; outline: none; width: 160px; }
   .search-box input:focus { border-color: #1a73e8; }
-  .search-box .search-icon { position: absolute; left: 10px; color: #888; font-size: 14px; }
+  .search-box .search-icon { position: absolute; left: 8px; color: #888; font-size: 11px; }
 
-  #status-msg { font-size: 12px; color: #666; margin-bottom: 12px; display: none; }
+  #status-msg { font-size: 11px; color: #666; margin-bottom: 8px; display: none; }
 
-  /* Table Style */
-  .data-table-container { width: 100%; overflow-x: auto; }
-  table.data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-  table.data-table th { font-weight: 700; color: #000; padding: 12px 8px; border-bottom: 1px solid #eee; }
-  table.data-table td { padding: 12px 8px; color: #333; vertical-align: middle; }
+  /* Table Style dengan Scroll Vertikal Max 5 Baris */
+  .data-table-container { width: 100%; max-height: 220px; overflow-y: auto; overflow-x: auto; border: 1px solid #eee; border-radius: 4px; }
+  table.data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+  table.data-table th { font-weight: 700; color: #000; padding: 8px 6px; border-bottom: 2px solid #eee; position: sticky; top: 0; background: #fff; z-index: 10; }
+  table.data-table td { padding: 6px; color: #333; vertical-align: middle; border-bottom: 1px solid #f2f2f2; }
   
-  .file-clickable { cursor: pointer; font-weight: 500; }
-  .file-clickable:hover { color: #1a73e8; text-decoration: underline; }
+  /* Style Khusus Nama File */
+  .file-clickable { cursor: pointer; font-weight: 700; font-size: 13px; color: #1a73e8; }
+  .file-clickable:hover { text-decoration: underline; color: #0b57d0; }
+  .file-size-tag { font-size: 10px; color: #777; font-weight: 400; margin-left: 4px; }
 
-  .action-btn { background: none; border: none; padding: 4px; color: #1a73e8; font-size: 16px; cursor: pointer; border-radius: 4px; }
+  .action-btn { background: none; border: none; padding: 2px 4px; color: #1a73e8; font-size: 13px; cursor: pointer; border-radius: 3px; }
   .action-btn:hover { background: #f0f4f9; }
   .action-btn.btn-refresh-row { color: #e67e22; }
 
-  .empty-state { text-align: center; color: #999; padding: 50px 20px; font-size: 14px; }
+  .empty-state { text-align: center; color: #999; padding: 30px 10px; font-size: 11px; }
+
+  /* Style Pagination (Kembali ke Kelipatan 25) */
+  .pagination-container { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 11px; color: #666; }
+  .pagination-left { display: flex; align-items: center; gap: 6px; }
+  .pagination-left select { padding: 4px 6px; border-radius: 4px; border: 1px solid #dcdfe6; outline: none; font-size: 11px; cursor: pointer; }
+  .pagination-right { display: flex; align-items: center; gap: 6px; }
 
   /* Overlay Drag & Drop */
-  #drag-overlay { display: none; position: fixed; inset: 0; background: rgba(26, 115, 232, 0.85); z-index: 200; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; border: 4px dashed #fff; pointer-events: none; }
+  #drag-overlay { display: none; position: fixed; inset: 0; background: rgba(26, 115, 232, 0.85); z-index: 200; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 600; border: 4px dashed #fff; pointer-events: none; }
   #drag-overlay.active { display: flex; }
 
   /* Modal preview */
-  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
   #modal-overlay.active { display: flex; }
-  #modal-box { background: #fff; border-radius: 12px; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
-  #modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eee; }
-  #modal-header h3 { font-size: 15px; word-break: break-all; padding-right: 10px; }
-  #modal-close { background: none; font-size: 20px; color: #888; padding: 4px 10px; border: none; cursor: pointer; }
+  #modal-box { background: #fff; border-radius: 8px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+  #modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #eee; }
+  #modal-header h3 { font-size: 14px; font-weight: 700; word-break: break-all; padding-right: 10px; color: #1a73e8; }
+  #modal-close { background: none; font-size: 16px; color: #888; padding: 2px 6px; border: none; cursor: pointer; }
   #modal-close:hover { color: #333; }
-  #modal-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  #modal-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; font-size: 11px; }
 
-  .stats-row { display: flex; gap: 20px; flex-wrap: wrap; }
-  .stat-box { background: #f4f6f9; border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 100px; }
-  .stat-box .num { font-size: 22px; font-weight: 700; color: #1a73e8; }
-  .stat-box .lbl { font-size: 11px; color: #777; margin-top: 2px; }
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat-box { background: #f4f6f9; border-radius: 6px; padding: 8px 12px; text-align: center; min-width: 80px; flex: 1; }
+  .stat-box .num { font-size: 18px; font-weight: 700; color: #1a73e8; }
+  .stat-box .lbl { font-size: 10px; color: #777; margin-top: 2px; }
 
-  table.color-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.color-table th, table.color-table td { border: 1px solid #eee; padding: 6px 10px; text-align: left; }
+  table.color-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.color-table th, table.color-table td { border: 1px solid #eee; padding: 5px 8px; text-align: left; }
   table.color-table th { background: #f4f6f9; }
-  .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
-  #preview-canvas-wrap { text-align: left; background: #000000; border: 1px solid #333; border-radius: 8px; padding: 10px; overflow: auto; max-height: 420px; cursor: grab; user-select: none; }
+  #preview-canvas-wrap { text-align: left; background: #000000; border: 1px solid #333; border-radius: 6px; padding: 8px; overflow: auto; max-height: 380px; cursor: grab; user-select: none; }
   #preview-canvas-wrap:active { cursor: grabbing; }
   #preview-canvas-wrap canvas { image-rendering: pixelated; display: block; pointer-events: none; }
-  .zoom-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; }
+  .zoom-toolbar { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #666; }
 
-  .loading-line { font-size: 13px; color: #888; padding: 20px; text-align: center; }
+  .loading-line { font-size: 11px; color: #888; padding: 16px; text-align: center; }
 </style>
 </head>
 <body>
@@ -82,11 +91,11 @@
 
 <div class="page-title">
   <span class="folder-icon">📁</span>
-  <span>Master File Upload — Folder Design</span>
+  <span>Master File Upload</span>
 </div>
 
 <div class="toolbar">
-  <button class="btn-upload-file" id="btn-pilih-file">📤 Upload .upt</button>
+  <button class="btn-upload-file" id="btn-pilih-file">📤 Upload Lokal (.upt)</button>
   <button id="btn-pilih-folder">📤 Upload Folder</button>
   <button id="btn-refresh">🔄 Pindai file baru</button>
   <button class="btn-dropdown">Semua ▾</button>
@@ -107,15 +116,33 @@
     <thead>
       <tr>
         <th>Nama file</th>
-        <th>Tanggal upload</th>
+        <th>Tanggal & Jam upload</th>
         <th>Nama Pelanggan</th>
         <th>Lokasi file</th>
-        <th style="width: 80px;">Aksi</th>
+        <th style="width: 70px;">Aksi</th>
       </tr>
     </thead>
     <tbody id="table-body">
     </tbody>
   </table>
+</div>
+
+<!-- Container Pagination (Kembali Kelipatan 25) -->
+<div class="pagination-container">
+  <div class="pagination-left">
+    <label for="rows-per-page">Tampilkan:</label>
+    <select id="rows-per-page">
+      <option value="25">25 baris</option>
+      <option value="50">50 baris</option>
+      <option value="100">100 baris</option>
+    </select>
+    <span id="pagination-info">Menampilkan 0-0 dari 0 file</span>
+  </div>
+  <div class="pagination-right">
+    <button id="btn-prev">◀ Previous</button>
+    <span id="page-number-display" style="font-weight: 600; margin: 0 4px;">Halaman 1</span>
+    <button id="btn-next">Next ▶</button>
+  </div>
 </div>
 
 <div class="empty-state" id="empty-state">Belum ada file di upload.</div>
@@ -131,9 +158,53 @@
 </div>
 
 <script>
+// ==========================================
+// KONFIGURASI GITHUB REPOSITORY
+// ==========================================
+const GH_CONFIG = {
+  username: "chamiedien76-boop",
+  repo: "meidin-workspace",      
+  folderPath: "File Design"      
+};
+
+// ==========================================
+// MAPPING NAMA PELANGGAN
+// ==========================================
+const CUSTOMER_MAP = {
+  "KM": "Dedi.S",
+  "KN": "Zaenal.M",
+  "G":  "Berlian"
+};
+
+function getCustomerName(fileName) {
+  if (!fileName) return "Pelanggan Umum";
+  const cleanName = fileName.toUpperCase();
+
+  const prefix2 = cleanName.substring(0, 2);
+  if (CUSTOMER_MAP[prefix2]) return CUSTOMER_MAP[prefix2];
+
+  const prefix1 = cleanName.substring(0, 1);
+  if (CUSTOMER_MAP[prefix1]) return CUSTOMER_MAP[prefix1];
+
+  return "Pelanggan Umum";
+}
+
 let rpcCounter = 0;
 const rpcPending = new Map();
-let currentFileList = [];
+
+let githubFileList = [];
+let localFileList = [];
+
+// Variable Pagination State (Kembali Default 25)
+let currentPage = 1;
+let rowsPerPage = 25;
+let currentActiveList = [];
+
+function renderAllFiles() {
+  currentActiveList = [...githubFileList, ...localFileList];
+  currentPage = 1;
+  renderFiles(currentActiveList);
+}
 
 window.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'invokeAPIResult') {
@@ -212,6 +283,7 @@ function resolve210vs236(data) {
   for (let i = 91; i < 111; i++) { if (data[i] !== 0) { allZero = false; break; } }
   return allZero ? 236 : 210;
 }
+
 const AMBIGUOUS_MARKER_BY_WIDTH = {
   '960':  { 0xDE: { candidates: [210, 236], resolve: resolve210vs236 } },
   '2688': { 0xDE: { candidates: [210, 236], resolve: resolve210vs236 } }
@@ -455,18 +527,78 @@ const inputFileManual = document.getElementById('input-file-manual');
 const inputFolderManual = document.getElementById('input-folder-manual');
 const searchInput = document.getElementById('search-input');
 
+// Element Pagination
+const rowsPerPageSelect = document.getElementById('rows-per-page');
+const btnPrev = document.getElementById('btn-prev');
+const btnNext = document.getElementById('btn-next');
+const paginationInfo = document.getElementById('pagination-info');
+const pageNumberDisplay = document.getElementById('page-number-display');
+
 let currentFolder = null;
 const ALLOWED_EXTS = ['.upt', '.jc5', '.ep', '.pat'];
 
-function formatDate(dateObj) {
+// Format Ukuran File
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '';
+  if (bytes < 1024) return `(${bytes} B)`;
+  if (bytes < 1024 * 1024) return `(${(bytes / 1024).toFixed(1)} KB)`;
+  return `(${(bytes / (1024 * 1024)).toFixed(1)} MB)`;
+}
+
+// Format Tanggal + Jam
+function formatDateTime(dateObj) {
   const d = dateObj || new Date();
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
-// FUNGSI DOWNLOAD FILE DARI TABEL
+// LOAD DARI GITHUB API
+async function loadFilesFromGitHub() {
+  if (!GH_CONFIG.username || GH_CONFIG.username === 'USERNAME_GITHUB_ANDA') {
+    return false;
+  }
+
+  statusMsg.style.display = 'block';
+  statusMsg.textContent = 'Memuat daftar file dari server...';
+
+  const pathSegment = GH_CONFIG.folderPath ? `/${GH_CONFIG.folderPath}` : '';
+  const apiUrl = `https://api.github.com/repos/${GH_CONFIG.username}/${GH_CONFIG.repo}/contents${pathSegment}`;
+
+  try {
+    const response = await fetch(apiUrl);
+    if (!response.ok) throw new Error('Gagal terhubung ke API GitHub');
+    
+    const data = await response.json();
+
+    githubFileList = data
+      .filter(item => item.type === 'file')
+      .filter(item => {
+        const ext = '.' + item.name.split('.').pop().toLowerCase();
+        return ALLOWED_EXTS.includes(ext);
+      })
+      .map(item => ({
+        name: item.name,
+        ext: '.' + item.name.split('.').pop().toLowerCase(),
+        downloadUrl: item.download_url,
+        size: item.size,
+        customer: getCustomerName(item.name),
+        location: 'Server'
+      }));
+
+    renderAllFiles();
+    statusMsg.textContent = `Berhasil memuat ${githubFileList.length} file dari server.`;
+    return true;
+  } catch (err) {
+    statusMsg.textContent = 'Gagal memuat dari server: ' + err.message;
+    return false;
+  }
+}
+
+// DOWNLOAD FILE
 async function downloadFile(file) {
   if (file.rawFile) {
     const a = document.createElement('a');
@@ -476,6 +608,23 @@ async function downloadFile(file) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
+    return;
+  }
+
+  if (file.downloadUrl) {
+    try {
+      const res = await fetch(file.downloadUrl);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      alert('Gagal mendownload file dari server: ' + err.message);
+    }
     return;
   }
 
@@ -494,36 +643,91 @@ async function downloadFile(file) {
   }
 }
 
+// MEMBACA SECARA REKURSIF UNTUK DOKUMEN/APP DESKTOP
 async function loadFolder(folderPath) {
   currentFolder = folderPath;
-  if (!folderPath) { renderFiles([]); return; }
+  if (!folderPath) return;
 
-  statusMsg.textContent = 'Memuat daftar file pola...';
-  const res = await fileBrowserAPI.listFiles(folderPath);
-  if (!res || !res.success) {
-    statusMsg.textContent = 'Gagal membaca folder: ' + (res ? res.error : 'tidak diketahui');
-    renderFiles([]);
-    return;
+  statusMsg.style.display = 'block';
+  statusMsg.textContent = 'Memindai folder untuk mendeteksi "File Design"...';
+
+  let allDesignFiles = [];
+
+  async function scanRecursive(targetPath) {
+    const res = await fileBrowserAPI.listFiles(targetPath);
+    if (!res || !res.success || !res.files) return;
+
+    for (const item of res.files) {
+      if (item.isDirectory) {
+        await scanRecursive(item.path);
+      } else {
+        const pathNorm = item.path.replace(/\\/g, '/').toLowerCase();
+        const ext = '.' + item.name.split('.').pop().toLowerCase();
+        
+        if (ALLOWED_EXTS.includes(ext)) {
+          const isInDesignFolder = pathNorm.startsWith('file design/') || 
+                                   pathNorm.includes('/file design/') || 
+                                   pathNorm.endsWith('/file design');
+          if (isInDesignFolder) {
+            allDesignFiles.push({
+              ...item,
+              ext: ext,
+              customer: getCustomerName(item.name),
+              location: 'Lokal'
+            });
+          }
+        }
+      }
+    }
   }
 
-  const patternFiles = (res.files || []).filter(f => ALLOWED_EXTS.includes(f.ext ? f.ext.toLowerCase() : ''));
-  currentFileList = patternFiles;
-  renderFiles(patternFiles);
+  await scanRecursive(folderPath);
+
+  localFileList = allDesignFiles;
+  renderAllFiles();
+  statusMsg.textContent = `Pemindaian selesai. Ditemukan ${localFileList.length} file di folder 'File Design'.`;
 }
 
 function renderFiles(files) {
   tableBody.innerHTML = '';
-  emptyState.style.display = files.length === 0 ? 'block' : 'none';
+  currentActiveList = files;
 
-  files.forEach(f => {
+  if (files.length === 0) {
+    emptyState.style.display = 'block';
+    paginationInfo.textContent = 'Menampilkan 0-0 dari 0 file';
+    pageNumberDisplay.textContent = 'Halaman 0 dari 0';
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  // Kalkulasi Pagination
+  const totalFiles = files.length;
+  const totalPages = Math.ceil(totalFiles / rowsPerPage);
+
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = Math.min(startIndex + rowsPerPage, totalFiles);
+
+  const paginatedFiles = files.slice(startIndex, endIndex);
+
+  paginatedFiles.forEach(f => {
     const tr = document.createElement('tr');
     
-    const dateStr = f.lastModified ? formatDate(new Date(f.lastModified)) : formatDate();
-    const customer = f.customer || '*';
-    const location = f.location || 'LOKAL';
+    const dateStr = f.lastModified ? formatDateTime(new Date(f.lastModified)) : formatDateTime();
+    const customer = f.customer || 'Pelanggan Umum';
+    const location = f.location || 'Lokal';
+    const sizeStr = formatFileSize(f.size);
 
     tr.innerHTML = `
-      <td><span class="file-clickable">${f.name}</span></td>
+      <td>
+        <span class="file-clickable">${f.name}</span>
+        <span class="file-size-tag">${sizeStr}</span>
+      </td>
       <td>${dateStr}</td>
       <td>${customer}</td>
       <td>${location}</td>
@@ -533,10 +737,8 @@ function renderFiles(files) {
       </td>
     `;
 
-    // Event Klik File -> Membuka Modal Preview
     tr.querySelector('.file-clickable').addEventListener('click', () => openPreview(f));
 
-    // Event Klik Tombol Download 📥
     tr.querySelector('.btn-download-row').addEventListener('click', (e) => {
       e.stopPropagation();
       downloadFile(f);
@@ -544,16 +746,47 @@ function renderFiles(files) {
 
     tableBody.appendChild(tr);
   });
+
+  // Update Tampilan Pagination
+  paginationInfo.textContent = `Menampilkan ${startIndex + 1}-${endIndex} dari ${totalFiles} file`;
+  pageNumberDisplay.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+
+  btnPrev.disabled = currentPage === 1;
+  btnNext.disabled = currentPage === totalPages;
 }
 
-// Filter Search Bar
+// Event Listeners Pagination
+rowsPerPageSelect.addEventListener('change', (e) => {
+  rowsPerPage = parseInt(e.target.value);
+  currentPage = 1;
+  renderFiles(currentActiveList);
+});
+
+btnPrev.addEventListener('click', () => {
+  if (currentPage > 1) {
+    currentPage--;
+    renderFiles(currentActiveList);
+  }
+});
+
+btnNext.addEventListener('click', () => {
+  const totalPages = Math.ceil(currentActiveList.length / rowsPerPage);
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderFiles(currentActiveList);
+  }
+});
+
+// Search Bar
 searchInput.addEventListener('input', (e) => {
   const val = e.target.value.toLowerCase();
-  const filtered = currentFileList.filter(f => f.name.toLowerCase().includes(val));
+  const allFiles = [...githubFileList, ...localFileList];
+  const filtered = allFiles.filter(f => f.name.toLowerCase().includes(val));
+  currentPage = 1;
   renderFiles(filtered);
 });
 
-// Event Handlers Upload File
+// Event Handlers
 document.getElementById('btn-pilih-file').addEventListener('click', () => inputFileManual.click());
 
 inputFileManual.addEventListener('change', (e) => {
@@ -564,17 +797,19 @@ inputFileManual.addEventListener('change', (e) => {
       alert('Format file tidak didukung!');
       return;
     }
+
     const newFileObj = {
       name: file.name,
       ext: ext,
       path: file.name,
       size: file.size,
       rawFile: file,
-      customer: '*',
-      location: 'LOKAL'
+      customer: getCustomerName(file.name),
+      location: 'Lokal'
     };
-    currentFileList.push(newFileObj);
-    renderFiles(currentFileList);
+    
+    localFileList.push(newFileObj);
+    renderAllFiles();
   }
 });
 
@@ -587,29 +822,48 @@ document.getElementById('btn-pilih-folder').addEventListener('click', async () =
   }
 });
 
+// BROWSER FOLDER SELECTOR LISTENER
 inputFolderManual.addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
   if (!files || files.length === 0) return;
 
   const patternFiles = files.filter(f => {
     const ext = '.' + f.name.split('.').pop().toLowerCase();
-    return ALLOWED_EXTS.includes(ext);
+    const relPath = (f.webkitRelativePath || f.name).replace(/\\/g, '/').toLowerCase();
+    
+    if (!ALLOWED_EXTS.includes(ext)) return false;
+
+    const isInDesignFolder = relPath.startsWith('file design/') || 
+                             relPath.includes('/file design/') || 
+                             relPath === 'file design';
+
+    return isInDesignFolder;
   }).map(f => ({
     name: f.name,
     ext: '.' + f.name.split('.').pop().toLowerCase(),
     path: f.webkitRelativePath || f.name,
     size: f.size,
     rawFile: f,
-    customer: '*',
-    location: 'LOKAL'
+    customer: getCustomerName(f.name),
+    location: 'Lokal'
   }));
 
-  currentFileList = patternFiles;
-  renderFiles(patternFiles);
+  if (patternFiles.length === 0) {
+    alert('Tidak ditemukan file pola (.upt, .jc5, .ep) di dalam folder "File Design".');
+    return;
+  }
+
+  localFileList = patternFiles;
+  renderAllFiles();
+  statusMsg.style.display = 'block';
+  statusMsg.textContent = `Berhasil memuat ${localFileList.length} file dari folder lokal.`;
 });
 
-document.getElementById('btn-refresh').addEventListener('click', () => {
-  if (currentFolder) loadFolder(currentFolder);
+document.getElementById('btn-refresh').addEventListener('click', async () => {
+  await loadFilesFromGitHub();
+  if (currentFolder) {
+    await loadFolder(currentFolder);
+  }
 });
 
 // Drag & Drop Handling
@@ -639,13 +893,13 @@ window.addEventListener('drop', (e) => {
     path: f.name,
     size: f.size,
     rawFile: f,
-    customer: '*',
-    location: 'LOKAL'
+    customer: getCustomerName(f.name),
+    location: 'Lokal'
   }));
 
   if (patternFiles.length > 0) {
-    currentFileList.push(...patternFiles);
-    renderFiles(currentFileList);
+    localFileList.push(...patternFiles);
+    renderAllFiles();
   } else {
     alert('Format file tidak didukung!');
   }
@@ -697,6 +951,18 @@ async function openPreview(file) {
     return;
   }
 
+  if (file.downloadUrl) {
+    try {
+      const res = await fetch(file.downloadUrl);
+      const buffer = await res.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      displayPatternModal(file, bytes);
+    } catch (err) {
+      modalBody.innerHTML = `<div class="loading-line">Gagal membaca file dari server: ${err.message}</div>`;
+    }
+    return;
+  }
+
   const res = await fileBrowserAPI.readFileBase64(file.path);
   if (!res.success) {
     modalBody.innerHTML = `<div class="loading-line">Gagal membaca file: ${res.error}</div>`;
@@ -731,12 +997,12 @@ function displayPatternModal(file, bytes) {
   }
   if (!rows) rows = '<tr><td colspan="2" style="color:#999;">Tidak ada warna terdeteksi</td></tr>';
 
+  // Menyembunyikan informasi Byte Header di Modal Preview
   modalBody.innerHTML = `
     <div class="stats-row">
       <div class="stat-box"><div class="num">${totalPick}</div><div class="lbl">Total Pick</div></div>
       <div class="stat-box"><div class="num">${jumlahWarnaDipakai}</div><div class="lbl">Jumlah Benang Dipakai</div></div>
       <div class="stat-box"><div class="num">${layout.width}</div><div class="lbl">Lebar (Hooks)</div></div>
-      <div class="stat-box"><div class="num">${layout.header}</div><div class="lbl">Header (Byte)</div></div>
     </div>
     <table class="color-table">
       <thead><tr><th>Warna Benang</th><th>Jumlah Pick</th></tr></thead>
@@ -754,13 +1020,13 @@ function displayPatternModal(file, bytes) {
   attachCanvasZoom(wrap, canvas, parsed.width, parsed.height);
 }
 
-// Inisialisasi awal tanpa data dummy
+// Inisialisasi awal
 (async function init() {
+  await loadFilesFromGitHub();
+  
   const saved = await fileBrowserAPI.getDefaultFolder();
   if (saved) {
     await loadFolder(saved);
-  } else {
-    renderFiles([]);
   }
 })();
 </script>
