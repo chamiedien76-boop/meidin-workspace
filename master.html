@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Master File Upload — Folder Design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { background: #ffffff; color: #333; padding: 24px; overflow-y: auto; height: 100vh; position: relative; }
+
+  /* Header & Title */
+  .page-title { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; color: #1a73e8; margin-bottom: 20px; }
+  .page-title span.folder-icon { font-size: 24px; }
+
+  /* Toolbar Actions */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  
+  button { cursor: pointer; border: 1px solid #dcdfe6; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #333; transition: all .2s; }
+  button:hover { background: #f5f7fa; }
+
+  .btn-upload-file { background: #00875a; color: #fff; border: none; }
+  .btn-upload-file:hover { background: #006c48; }
+
+  .btn-dropdown { background: #f0f0f0; border: none; color: #333; }
+
+  .search-box { margin-left: auto; position: relative; display: flex; align-items: center; }
+  .search-box input { border: 1px solid #dcdfe6; border-radius: 6px; padding: 8px 12px 8px 30px; font-size: 13px; outline: none; width: 180px; }
+  .search-box input:focus { border-color: #1a73e8; }
+  .search-box .search-icon { position: absolute; left: 10px; color: #888; font-size: 14px; }
+
+  #status-msg { font-size: 12px; color: #666; margin-bottom: 12px; display: none; }
+
+  /* Table Style */
+  .data-table-container { width: 100%; overflow-x: auto; }
+  table.data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+  table.data-table th { font-weight: 700; color: #000; padding: 12px 8px; border-bottom: 1px solid #eee; }
+  table.data-table td { padding: 12px 8px; color: #333; vertical-align: middle; }
+  
+  .file-clickable { cursor: pointer; font-weight: 500; }
+  .file-clickable:hover { color: #1a73e8; text-decoration: underline; }
+
+  .action-btn { background: none; border: none; padding: 4px; color: #1a73e8; font-size: 16px; cursor: pointer; border-radius: 4px; }
+  .action-btn:hover { background: #f0f4f9; }
+  .action-btn.btn-refresh-row { color: #e67e22; }
+
+  .empty-state { text-align: center; color: #999; padding: 50px 20px; font-size: 14px; }
+
+  /* Overlay Drag & Drop */
+  #drag-overlay { display: none; position: fixed; inset: 0; background: rgba(26, 115, 232, 0.85); z-index: 200; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; border: 4px dashed #fff; pointer-events: none; }
+  #drag-overlay.active { display: flex; }
+
+  /* Modal preview */
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  #modal-overlay.active { display: flex; }
+  #modal-box { background: #fff; border-radius: 12px; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+  #modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eee; }
+  #modal-header h3 { font-size: 15px; word-break: break-all; padding-right: 10px; }
+  #modal-close { background: none; font-size: 20px; color: #888; padding: 4px 10px; border: none; cursor: pointer; }
+  #modal-close:hover { color: #333; }
+  #modal-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+  .stats-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .stat-box { background: #f4f6f9; border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 100px; }
+  .stat-box .num { font-size: 22px; font-weight: 700; color: #1a73e8; }
+  .stat-box .lbl { font-size: 11px; color: #777; margin-top: 2px; }
+
+  table.color-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.color-table th, table.color-table td { border: 1px solid #eee; padding: 6px 10px; text-align: left; }
+  table.color-table th { background: #f4f6f9; }
+  .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  #preview-canvas-wrap { text-align: left; background: #000000; border: 1px solid #333; border-radius: 8px; padding: 10px; overflow: auto; max-height: 420px; cursor: grab; user-select: none; }
+  #preview-canvas-wrap:active { cursor: grabbing; }
+  #preview-canvas-wrap canvas { image-rendering: pixelated; display: block; pointer-events: none; }
+  .zoom-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; }
+
+  .loading-line { font-size: 13px; color: #888; padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="drag-overlay">📂 Lepaskan file Pola (UPT / JC5 / EP) di sini</div>
+
+<div class="page-title">
+  <span class="folder-icon">📁</span>
+  <span>Master File Upload — Folder Design</span>
+</div>
+
+<div class="toolbar">
+  <button class="btn-upload-file" id="btn-pilih-file">📤 Upload .upt</button>
+  <button id="btn-pilih-folder">📤 Upload Folder</button>
+  <button id="btn-refresh">🔄 Pindai file baru</button>
+  <button class="btn-dropdown">Semua ▾</button>
+
+  <div class="search-box">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="search-input" placeholder="Cari nama..." />
+  </div>
+
+  <input type="file" id="input-file-manual" accept=".upt,.jc5,.ep,.pat" style="display:none;" />
+  <input type="file" id="input-folder-manual" webkitdirectory directory multiple style="display:none;" />
+</div>
+
+<div id="status-msg"></div>
+
+<div class="data-table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Nama file</th>
+        <th>Tanggal upload</th>
+        <th>Nama Pelanggan</th>
+        <th>Lokasi file</th>
+        <th style="width: 80px;">Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+    </tbody>
+  </table>
+</div>
+
+<div class="empty-state" id="empty-state">Belum ada file di upload.</div>
+
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-header">
+      <h3 id="modal-title">-</h3>
+      <button id="modal-close">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let rpcCounter = 0;
+const rpcPending = new Map();
+let currentFileList = [];
+
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'invokeAPIResult') {
+    const pending = rpcPending.get(event.data.requestId);
+    if (pending) {
+      rpcPending.delete(event.data.requestId);
+      pending(event.data.result);
+    }
+  }
+});
+
+function callAPI(api, method, ...args) {
+  return new Promise((resolve) => {
+    if (window.top === window.self) {
+      resolve({ success: false, error: 'Fitur ini hanya berjalan di dalam aplikasi desktop.' });
+      return;
+    }
+    const requestId = 'req_' + (++rpcCounter) + '_' + Date.now();
+    rpcPending.set(requestId, resolve);
+    window.top.postMessage({ action: 'invokeAPI', requestId, api, method, args }, '*');
+    setTimeout(() => {
+      if (rpcPending.has(requestId)) {
+        rpcPending.delete(requestId);
+        resolve({ success: false, error: 'Timeout: tidak ada balasan dari aplikasi utama.' });
+      }
+    }, 15000);
+  });
+}
+
+async function callBrowserAPI(method, ...args) {
+  const envelope = await callAPI('fileBrowserAPI', method, ...args);
+  if (!envelope.success) return { __bridgeFailed: true, error: envelope.error };
+  return envelope.value;
+}
+
+const fileBrowserAPI = {
+  getDefaultFolder: async () => {
+    const v = await callBrowserAPI('getDefaultFolder');
+    return v && v.__bridgeFailed ? null : v;
+  },
+  selectFolder: async () => {
+    const v = await callBrowserAPI('selectFolder');
+    return v && v.__bridgeFailed ? null : v;
+  },
+  listFiles: async (folderPath) => {
+    const v = await callBrowserAPI('listFiles', folderPath);
+    return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
+  },
+  readFileBase64: async (filePath) => {
+    const v = await callBrowserAPI('readFileBase64', filePath);
+    return (v && v.__bridgeFailed) ? { success: false, error: v.error } : v;
+  }
+};
+
+const HEADER_OPTIONS_BY_WIDTH = {
+  '320':  [ {value:'250'}, {value:'210'}, {value:'246'} ],
+  '640':  [ {value:'716'}, {value:'250'}, {value:'246'}, {value:'210'} ],
+  '960':  [ {value:'250'}, {value:'366'}, {value:'236'}, {value:'210'} ],
+  '1184': [ {value:'680'} ],
+  '1344': [ {value:'160'}, {value:'250'}, {value:'246'}, {value:'404'} ],
+  '1536': [ {value:'250'}, {value:'246'}, {value:'236'}, {value:'160'} ],
+  '2688': [ {value:'460'}, {value:'455'}, {value:'250'}, {value:'246'}, {value:'236'}, {value:'210'} ]
+};
+
+const HEADER_MARKER_BYTE5 = { 0xDE: 210, 0xE8: 246, 0x92: 160, 0xEC: 250 };
+const HEADER_MARKER_BYTE5_BY_WIDTH = {
+  '1344': { 0xE8: 246, 0xDE: 404, 0xEC: 250 },
+  '1184': { 0xE8: 680, 0xDE: 680, 0xEC: 680 },
+  '1536': { 0xDE: 236 },
+  '960': { 0xE8: 366 }
+};
+
+function resolve210vs236(data) {
+  if (data.length < 111) return null;
+  let allZero = true;
+  for (let i = 91; i < 111; i++) { if (data[i] !== 0) { allZero = false; break; } }
+  return allZero ? 236 : 210;
+}
+const AMBIGUOUS_MARKER_BY_WIDTH = {
+  '960':  { 0xDE: { candidates: [210, 236], resolve: resolve210vs236 } },
+  '2688': { 0xDE: { candidates: [210, 236], resolve: resolve210vs236 } }
+};
+
+function tryMarkerAutoDetect(data) {
+  if (!data || data.length < 16) return null;
+  const width = (data[14] << 8) | data[15];
+  const validOpts = HEADER_OPTIONS_BY_WIDTH[String(width)];
+  if (!validOpts) return null;
+
+  const ambiguous = AMBIGUOUS_MARKER_BY_WIDTH[String(width)];
+  if (ambiguous && ambiguous[data[5]]) {
+    const rule = ambiguous[data[5]];
+    const resolvedHeader = rule.resolve(data);
+    if (resolvedHeader !== null && rule.candidates.includes(resolvedHeader)) {
+      return { width: width, header: resolvedHeader };
+    }
+    return null;
+  }
+
+  const widthOverride = HEADER_MARKER_BYTE5_BY_WIDTH[String(width)];
+  const header = (widthOverride && widthOverride[data[5]] !== undefined) ? widthOverride[data[5]] : HEADER_MARKER_BYTE5[data[5]];
+  if (header === undefined) return null;
+  if (!validOpts.some(o => parseInt(o.value) === header)) return null;
+
+  return { width: width, header: header };
+}
+
+function tryJC5HeaderDetect(data) {
+  if (!data || data.length < 16) return null;
+  const nameLen = (data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15];
+  if (nameLen < 0 || nameLen > 128) return null;
+  const header = 113 + nameLen;
+  if (header < 16 || header >= data.length) return null;
+  if ((data.length - header) % 336 !== 0) return null;
+  return header;
+}
+
+const EP_HEADER = 34;
+function tryEPAutoDetect(data) {
+  if (!data || data.length < 34) return null;
+  const width = data[32] + (data[33] << 8) + 32;
+  if (width < 8 || width > 10000 || width % 8 !== 0) return null;
+  return { width: width, header: EP_HEADER };
+}
+
+function detectFileLayout(fileName, data) {
+  const lower = fileName.toLowerCase();
+  const isJC5 = lower.endsWith('.jc5');
+  const isEP = lower.endsWith('.ep');
+
+  if (isEP) {
+    const epResult = tryEPAutoDetect(data);
+    if (epResult) return { width: epResult.width, header: epResult.header, isJC5: false };
+    return { width: 1344, header: EP_HEADER, isJC5: false };
+  }
+
+  if (isJC5) {
+    const jc5Header = tryJC5HeaderDetect(data);
+    if (jc5Header !== null) return { width: 2688, header: jc5Header, isJC5: true };
+    return { width: 2688, header: 460, isJC5: true };
+  }
+
+  const marker = tryMarkerAutoDetect(data);
+  if (marker) return { width: marker.width, header: marker.header, isJC5: false };
+
+  const fileSize = data.length;
+  if (fileSize > 180000 || (fileSize > 100000 && (fileSize - 246) % 336 === 0)) {
+    return { width: 2688, header: 246, isJC5: false };
+  }
+  return { width: 1344, header: 160, isJC5: false };
+}
+
+const COLOR_NAMES = ['Abu-abu', 'Merah', 'Hijau', 'Kuning', 'Biru', 'Biru Muda', 'Pink', 'Oranye'];
+const COLOR_HEX   = ['#808080', '#ff0000', '#00dc00', '#e6be00', '#0064ff', '#00c8ff', '#ff69b4', '#ff8c00'];
+
+function parsePatternFile(data, width, header, isJC5) {
+  const bytesPerLine = Math.ceil(width / 8);
+  const usable = data.slice(header);
+  const height = Math.floor(usable.length / bytesPerLine);
+
+  const bitMatrix = [];
+  for (let y = 0; y < height; y++) {
+    const row = new Uint8Array(width);
+    for (let b = 0; b < bytesPerLine; b++) {
+      const byteIndex = y * bytesPerLine + b;
+      if (byteIndex >= usable.length) break;
+      const byte = usable[byteIndex];
+      for (let bit = 0; bit < 8; bit++) {
+        const px = b * 8 + bit;
+        if (px < width) row[px] = (byte >> bit) & 1;
+      }
+    }
+    bitMatrix.push(row);
+  }
+
+  const maxIdx = width - 1;
+  let idx;
+  if (isJC5) {
+    idx = [0, 1, 2, 3, 4, 5, 6, 7];
+  } else {
+    idx = [maxIdx - 1, maxIdx - 2, maxIdx - 3, maxIdx - 4, maxIdx - 5, maxIdx - 6, maxIdx - 7, maxIdx - 8];
+  }
+
+  const colorCounters = new Array(8).fill(0);
+  for (let y = 0; y < height; y++) {
+    const row = bitMatrix[y];
+    for (let c = 0; c < 8; c++) {
+      if (row[idx[c]] === 1) { colorCounters[c]++; break; }
+    }
+  }
+
+  return { bitMatrix, width, height, colorCounters, colorIdx: idx, isJC5 };
+}
+
+const MARKER_RGB = [
+  {r:128,g:128,b:128}, {r:255,g:0,b:0}, {r:0,g:220,b:0}, {r:230,g:190,b:0},
+  {r:0,g:100,b:255}, {r:0,g:200,b:255}, {r:255,g:105,b:180}, {r:255,g:140,b:0}
+];
+const DOT_RGB = [
+  {r:140,g:140,b:140}, {r:255,g:0,b:0}, {r:0,g:220,b:0}, {r:230,g:190,b:0},
+  {r:0,g:100,b:255}, {r:0,g:200,b:255}, {r:255,g:105,b:180}, {r:255,g:140,b:0}
+];
+
+function renderThumbnail(canvas, parsed) {
+  const { bitMatrix, width, height, isJC5, colorIdx } = parsed;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(width, height);
+
+  const [idxAbu, idxMerah, idxHijau, idxKun, idxBiru, idxBmud, idxPink, idxOra] = colorIdx;
+
+  for (let y = 0; y < height; y++) {
+    const row = bitMatrix[y];
+    let activeColorIndex = -1;
+    if (row[idxAbu] === 1) activeColorIndex = 0;
+    else if (row[idxMerah] === 1) activeColorIndex = 1;
+    else if (row[idxHijau] === 1) activeColorIndex = 2;
+    else if (row[idxKun] === 1) activeColorIndex = 3;
+    else if (row[idxBiru] === 1) activeColorIndex = 4;
+    else if (row[idxBmud] === 1) activeColorIndex = 5;
+    else if (row[idxPink] === 1) activeColorIndex = 6;
+    else if (row[idxOra] === 1) activeColorIndex = 7;
+
+    const baseDotColor = activeColorIndex !== -1 ? DOT_RGB[activeColorIndex] : { r: 110, g: 110, b: 110 };
+    const rowOffset = y * width;
+
+    for (let x = 0; x < width; x++) {
+      let finalColor = { r: 0, g: 0, b: 0 };
+      if (row[x] === 1) {
+        const isColorZone = isJC5 ? (x >= 0 && x <= 7) : (x >= idxOra && x <= idxAbu);
+        if (isColorZone) {
+          if (x === idxAbu) finalColor = MARKER_RGB[0];
+          else if (x === idxMerah) finalColor = MARKER_RGB[1];
+          else if (x === idxHijau) finalColor = MARKER_RGB[2];
+          else if (x === idxKun) finalColor = MARKER_RGB[3];
+          else if (x === idxBiru) finalColor = MARKER_RGB[4];
+          else if (x === idxBmud) finalColor = MARKER_RGB[5];
+          else if (x === idxPink) finalColor = MARKER_RGB[6];
+          else if (x === idxOra) finalColor = MARKER_RGB[7];
+        } else {
+          finalColor = baseDotColor;
+        }
+      }
+      const i = (rowOffset + x) * 4;
+      imgData.data[i] = finalColor.r; imgData.data[i+1] = finalColor.g; imgData.data[i+2] = finalColor.b; imgData.data[i+3] = 255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function attachCanvasZoom(wrap, canvas, naturalWidth, naturalHeight) {
+  const wrapWidth = Math.max(wrap.clientWidth - 4, 50);
+  let baseScale = Math.min(wrapWidth / naturalWidth, 1) || 1;
+  let zoom = 1;
+
+  wrap.style.cursor = 'grab';
+  wrap.style.userSelect = 'none';
+
+  function applyZoom() {
+    canvas.style.width = (naturalWidth * baseScale * zoom) + 'px';
+    canvas.style.height = (naturalHeight * baseScale * zoom) + 'px';
+  }
+  canvas.style.imageRendering = 'pixelated';
+  applyZoom();
+
+  wrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const fracX = (e.clientX - rect.left) / rect.width;
+    const fracY = (e.clientY - rect.top) / rect.height;
+    const prevW = canvas.getBoundingClientRect().width;
+    const prevH = canvas.getBoundingClientRect().height;
+
+    const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+    zoom = Math.min(Math.max(zoom * factor, 0.1), 30);
+    applyZoom();
+
+    const newW = canvas.getBoundingClientRect().width;
+    const newH = canvas.getBoundingClientRect().height;
+    wrap.scrollLeft += fracX * (newW - prevW);
+    wrap.scrollTop += fracY * (newH - prevH);
+
+    const zoomLabel = document.getElementById('zoom-percent-label');
+    if (zoomLabel) zoomLabel.textContent = Math.round(zoom * baseScale * 100) + '%';
+  }, { passive: false });
+
+  let isMouseDown = false;
+  let startX = 0, startY = 0;
+  let scrollLeft = 0, scrollTop = 0;
+
+  wrap.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    isMouseDown = true;
+    wrap.style.cursor = 'grabbing';
+    startX = e.pageX - wrap.offsetLeft;
+    startY = e.pageY - wrap.offsetTop;
+    scrollLeft = wrap.scrollLeft;
+    scrollTop = wrap.scrollTop;
+  });
+
+  wrap.addEventListener('mouseleave', () => { isMouseDown = false; wrap.style.cursor = 'grab'; });
+  wrap.addEventListener('mouseup', () => { isMouseDown = false; wrap.style.cursor = 'grab'; });
+
+  wrap.addEventListener('mousemove', (e) => {
+    if (!isMouseDown) return;
+    e.preventDefault();
+    const x = e.pageX - wrap.offsetLeft;
+    const y = e.pageY - wrap.offsetTop;
+    wrap.scrollLeft = scrollLeft - (x - startX);
+    wrap.scrollTop = scrollTop - (y - startY);
+  });
+}
+
+const statusMsg = document.getElementById('status-msg');
+const tableBody = document.getElementById('table-body');
+const emptyState = document.getElementById('empty-state');
+const inputFileManual = document.getElementById('input-file-manual');
+const inputFolderManual = document.getElementById('input-folder-manual');
+const searchInput = document.getElementById('search-input');
+
+let currentFolder = null;
+const ALLOWED_EXTS = ['.upt', '.jc5', '.ep', '.pat'];
+
+function formatDate(dateObj) {
+  const d = dateObj || new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+// FUNGSI DOWNLOAD FILE DARI TABEL
+async function downloadFile(file) {
+  if (file.rawFile) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file.rawFile);
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    return;
+  }
+
+  if (file.path) {
+    const res = await fileBrowserAPI.readFileBase64(file.path);
+    if (res && res.success) {
+      const a = document.createElement('a');
+      a.href = 'data:application/octet-stream;base64,' + res.base64;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      alert('Gagal mendownload file: ' + (res ? res.error : 'File tidak ditemukan'));
+    }
+  }
+}
+
+async function loadFolder(folderPath) {
+  currentFolder = folderPath;
+  if (!folderPath) { renderFiles([]); return; }
+
+  statusMsg.textContent = 'Memuat daftar file pola...';
+  const res = await fileBrowserAPI.listFiles(folderPath);
+  if (!res || !res.success) {
+    statusMsg.textContent = 'Gagal membaca folder: ' + (res ? res.error : 'tidak diketahui');
+    renderFiles([]);
+    return;
+  }
+
+  const patternFiles = (res.files || []).filter(f => ALLOWED_EXTS.includes(f.ext ? f.ext.toLowerCase() : ''));
+  currentFileList = patternFiles;
+  renderFiles(patternFiles);
+}
+
+function renderFiles(files) {
+  tableBody.innerHTML = '';
+  emptyState.style.display = files.length === 0 ? 'block' : 'none';
+
+  files.forEach(f => {
+    const tr = document.createElement('tr');
+    
+    const dateStr = f.lastModified ? formatDate(new Date(f.lastModified)) : formatDate();
+    const customer = f.customer || '*';
+    const location = f.location || 'LOKAL';
+
+    tr.innerHTML = `
+      <td><span class="file-clickable">${f.name}</span></td>
+      <td>${dateStr}</td>
+      <td>${customer}</td>
+      <td>${location}</td>
+      <td>
+        <button class="action-btn btn-download-row" title="Download">📥</button>
+        <button class="action-btn btn-refresh-row" title="Refresh">🔄</button>
+      </td>
+    `;
+
+    // Event Klik File -> Membuka Modal Preview
+    tr.querySelector('.file-clickable').addEventListener('click', () => openPreview(f));
+
+    // Event Klik Tombol Download 📥
+    tr.querySelector('.btn-download-row').addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadFile(f);
+    });
+
+    tableBody.appendChild(tr);
+  });
+}
+
+// Filter Search Bar
+searchInput.addEventListener('input', (e) => {
+  const val = e.target.value.toLowerCase();
+  const filtered = currentFileList.filter(f => f.name.toLowerCase().includes(val));
+  renderFiles(filtered);
+});
+
+// Event Handlers Upload File
+document.getElementById('btn-pilih-file').addEventListener('click', () => inputFileManual.click());
+
+inputFileManual.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_EXTS.includes(ext)) {
+      alert('Format file tidak didukung!');
+      return;
+    }
+    const newFileObj = {
+      name: file.name,
+      ext: ext,
+      path: file.name,
+      size: file.size,
+      rawFile: file,
+      customer: '*',
+      location: 'LOKAL'
+    };
+    currentFileList.push(newFileObj);
+    renderFiles(currentFileList);
+  }
+});
+
+document.getElementById('btn-pilih-folder').addEventListener('click', async () => {
+  const picked = await fileBrowserAPI.selectFolder();
+  if (picked) {
+    await loadFolder(picked);
+  } else {
+    inputFolderManual.click();
+  }
+});
+
+inputFolderManual.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (!files || files.length === 0) return;
+
+  const patternFiles = files.filter(f => {
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    return ALLOWED_EXTS.includes(ext);
+  }).map(f => ({
+    name: f.name,
+    ext: '.' + f.name.split('.').pop().toLowerCase(),
+    path: f.webkitRelativePath || f.name,
+    size: f.size,
+    rawFile: f,
+    customer: '*',
+    location: 'LOKAL'
+  }));
+
+  currentFileList = patternFiles;
+  renderFiles(patternFiles);
+});
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  if (currentFolder) loadFolder(currentFolder);
+});
+
+// Drag & Drop Handling
+const dragOverlay = document.getElementById('drag-overlay');
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dragOverlay.classList.add('active');
+});
+
+window.addEventListener('dragleave', (e) => {
+  if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+    dragOverlay.classList.remove('active');
+  }
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragOverlay.classList.remove('active');
+  const files = Array.from(e.dataTransfer.files);
+  const patternFiles = files.filter(f => {
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    return ALLOWED_EXTS.includes(ext);
+  }).map(f => ({
+    name: f.name,
+    ext: '.' + f.name.split('.').pop().toLowerCase(),
+    path: f.name,
+    size: f.size,
+    rawFile: f,
+    customer: '*',
+    location: 'LOKAL'
+  }));
+
+  if (patternFiles.length > 0) {
+    currentFileList.push(...patternFiles);
+    renderFiles(currentFileList);
+  } else {
+    alert('Format file tidak didukung!');
+  }
+});
+
+function openPreviewFromFileObject(file) {
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  
+  if (!ALLOWED_EXTS.includes(ext)) {
+    alert('Format file tidak didukung!');
+    return;
+  }
+
+  const fileObj = { name: file.name, ext: ext, path: file.name, size: file.size };
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const bytes = new Uint8Array(e.target.result);
+    displayPatternModal(fileObj, bytes);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+const modalOverlay = document.getElementById('modal-overlay');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+function closeModal() {
+  modalOverlay.classList.remove('active');
+  modalBody.innerHTML = '';
+}
+
+function base64ToUint8Array(base64) {
+  const binStr = atob(base64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return bytes;
+}
+
+async function openPreview(file) {
+  modalTitle.textContent = file.name;
+  modalBody.innerHTML = '<div class="loading-line">Memuat file...</div>';
+  modalOverlay.classList.add('active');
+
+  if (file.rawFile) {
+    openPreviewFromFileObject(file.rawFile);
+    return;
+  }
+
+  const res = await fileBrowserAPI.readFileBase64(file.path);
+  if (!res.success) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal membaca file: ${res.error}</div>`;
+    return;
+  }
+
+  try {
+    const bytes = base64ToUint8Array(res.base64);
+    displayPatternModal(file, bytes);
+  } catch (err) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal memproses file pola: ${err.message}</div>`;
+  }
+}
+
+function displayPatternModal(file, bytes) {
+  modalTitle.textContent = file.name;
+  modalOverlay.classList.add('active');
+
+  const layout = detectFileLayout(file.name, bytes);
+  const parsed = parsePatternFile(bytes, layout.width, layout.header, layout.isJC5);
+
+  const totalPick = parsed.height;
+  const jumlahWarnaDipakai = parsed.colorCounters.filter(c => c > 0).length;
+
+  let rows = '';
+  for (let i = 0; i < 8; i++) {
+    if (parsed.colorCounters[i] === 0) continue;
+    rows += `<tr>
+      <td><span class="color-dot" style="background:${COLOR_HEX[i]}"></span>${COLOR_NAMES[i]}</td>
+      <td>${parsed.colorCounters[i]}</td>
+    </tr>`;
+  }
+  if (!rows) rows = '<tr><td colspan="2" style="color:#999;">Tidak ada warna terdeteksi</td></tr>';
+
+  modalBody.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-box"><div class="num">${totalPick}</div><div class="lbl">Total Pick</div></div>
+      <div class="stat-box"><div class="num">${jumlahWarnaDipakai}</div><div class="lbl">Jumlah Benang Dipakai</div></div>
+      <div class="stat-box"><div class="num">${layout.width}</div><div class="lbl">Lebar (Hooks)</div></div>
+      <div class="stat-box"><div class="num">${layout.header}</div><div class="lbl">Header (Byte)</div></div>
+    </div>
+    <table class="color-table">
+      <thead><tr><th>Warna Benang</th><th>Jumlah Pick</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="zoom-toolbar">
+      <span>🔍 Scroll mouse untuk zoom | Klik kiri & tahan untuk geser</span>
+      <span id="zoom-percent-label" style="font-weight:600; margin-left:auto;">100%</span>
+    </div>
+    <div id="preview-canvas-wrap"><canvas id="pattern-canvas"></canvas></div>
+  `;
+  const canvas = document.getElementById('pattern-canvas');
+  renderThumbnail(canvas, parsed);
+  const wrap = document.getElementById('preview-canvas-wrap');
+  attachCanvasZoom(wrap, canvas, parsed.width, parsed.height);
+}
+
+// Inisialisasi awal tanpa data dummy
+(async function init() {
+  const saved = await fileBrowserAPI.getDefaultFolder();
+  if (saved) {
+    await loadFolder(saved);
+  } else {
+    renderFiles([]);
+  }
+})();
+</script>
+</body>
+</html>
