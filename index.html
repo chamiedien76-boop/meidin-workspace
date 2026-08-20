@@ -39,6 +39,13 @@
       flex-direction: column;
       z-index: 10;
       flex-shrink: 0;
+      transition: width 0.3s ease; /* Transisi halus saat toggle */
+      position: relative;
+    }
+
+    /* KONDISI SIDEBAR SAAT MINIMIZE/COLLAPSED */
+    .sidebar.collapsed {
+      width: 65px;
     }
 
     .brand-logo {
@@ -47,16 +54,40 @@
       align-items: center;
       gap: 10px;
       border-bottom: 1px solid #f0f0f0;
+      position: relative;
+      overflow: hidden;
+      white-space: nowrap;
+      cursor: pointer; /* Menandakan bahwa area logo bisa diklik */
+      user-select: none;
     }
 
     .brand-logo img {
       width: 35px;
       height: auto;
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+
+    .brand-logo:hover img {
+      transform: scale(1.08); /* Efek perbesaran halus saat hover logo */
     }
 
     .brand-logo h2 {
       font-size: 16px;
       color: #333;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+
+    /* Pengaturan teks & ikon saat collapsed */
+    .sidebar.collapsed .brand-logo h2,
+    .sidebar.collapsed .nav-text {
+      display: none;
+    }
+
+    .sidebar.collapsed .brand-logo {
+      padding: 15px 10px;
+      justify-content: center;
     }
 
     .nav-menu {
@@ -83,6 +114,25 @@
       font-weight: 500;
       cursor: pointer;
       transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+
+    .nav-icon {
+      font-style: normal;
+      width: 24px;
+      display: inline-block;
+      text-align: center;
+      flex-shrink: 0;
+      margin-right: 10px;
+    }
+
+    .sidebar.collapsed .nav-link {
+      padding: 12px 10px;
+      justify-content: center;
+    }
+
+    .sidebar.collapsed .nav-icon {
+      margin-right: 0;
     }
 
     .nav-link:hover, .nav-link.active {
@@ -98,7 +148,7 @@
       background-color: #f4f6f9;
     }
 
-    /* IFRAME STYLE (Mencegah masalah klik/overlay) */
+    /* IFRAME STYLE */
     .app-frame {
       width: 100%;
       height: 100%;
@@ -119,15 +169,13 @@
 
     /* ========================================================
        KHUSUS UNTUK APLIKASI HP / ANDROID (LAYAR SEMPIT <= 768px)
-       Sidebar otomatis pindah ke ATAS menjadi Navigation Bar
        ======================================================== */
     @media screen and (max-width: 768px) {
       .app-container {
-        flex-direction: column; /* Ubah alur elemen dari menyamping ke atas-bawah */
+        flex-direction: column;
       }
 
-      /* Ubah Sidebar menjadi Topbar di HP */
-      .sidebar {
+      .sidebar, .sidebar.collapsed {
         width: 100%;
         height: auto;
         max-height: 110px;
@@ -138,13 +186,16 @@
 
       .brand-logo {
         padding: 8px 12px;
+        cursor: default; /* Nonaktifkan pointer klik di mobile */
       }
 
-      .brand-logo h2 {
+      .brand-logo h2,
+      .sidebar.collapsed .brand-logo h2,
+      .sidebar.collapsed .nav-text {
+        display: block;
         font-size: 14px;
       }
 
-      /* Menu scroll horizontal ke samping di HP */
       .nav-menu {
         flex-direction: row;
         overflow-x: auto;
@@ -158,13 +209,17 @@
         width: auto;
       }
 
-      .nav-link {
+      .nav-link, .sidebar.collapsed .nav-link {
         padding: 8px 12px;
         font-size: 13px;
         border-radius: 6px;
+        justify-content: flex-start;
       }
 
-      /* Area Iframe menyesuaikan sisa tinggi layar */
+      .nav-icon, .sidebar.collapsed .nav-icon {
+        margin-right: 6px;
+      }
+
       .main-content {
         width: 100%;
         flex: 1;
@@ -173,12 +228,10 @@
     }
 
 @media print {
-  /* Sembunyikan sidebar navigasi */
   .sidebar {
     display: none !important;
   }
 
-  /* Buat container & main-content memenuhi halaman cetak */
   .app-container, .main-content {
     width: 100% !important;
     height: 100% !important;
@@ -189,12 +242,10 @@
     left: 0 !important;
   }
 
-  /* Sembunyikan iframe yang tidak aktif */
   .app-frame {
     display: none !important;
   }
 
-  /* Iframe yang aktif dipaksa tampil penuh */
   .app-frame.active {
     display: block !important;
     width: 100% !important;
@@ -211,33 +262,47 @@
 
   <div class="app-container">
     <!-- SIDEBAR / TOPBAR -->
-    <nav class="sidebar">
-      <div class="brand-logo">
+    <nav class="sidebar" id="sidebar">
+      <div class="brand-logo" onclick="toggleSidebar()" title="Klik untuk minimize/expand sidebar">
         <img src="./logo-meidin.png" alt="Logo" id="appLogo">
         <h2>Meidin Workspace</h2>
       </div>
 
       <ul class="nav-menu">
         <li class="nav-item">
-          <a class="nav-link active" onclick="openPage('appDashboard', this)">🏠 Dashboard</a>
+          <a class="nav-link active" onclick="openPage('appDashboard', this)">
+            <i class="nav-icon">🏠</i><span class="nav-text">Dashboard</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appProduction', this)">⚙️ Smart Production</a>
+          <a class="nav-link" onclick="openPage('appProduction', this)">
+            <i class="nav-icon">⚙️</i><span class="nav-text">Smart Production</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appLabel', this)">🏷️ Smart Label</a>
+          <a class="nav-link" onclick="openPage('appLabel', this)">
+            <i class="nav-icon">🏷️</i><span class="nav-text">Smart Label</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appProsesGambar', this)">✏️ Proses Gambar</a>
+          <a class="nav-link" onclick="openPage('appProsesGambar', this)">
+            <i class="nav-icon">✏️</i><span class="nav-text">Proses Gambar</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appPdfviewer', this)">📊 PDF Viewer</a>
+          <a class="nav-link" onclick="openPage('appPdfviewer', this)">
+            <i class="nav-icon">📊</i><span class="nav-text">PDF Viewer</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appViewerUpt', this)">👁️ UPT Viewer</a>
+          <a class="nav-link" onclick="openPage('appViewerUpt', this)">
+            <i class="nav-icon">👁️</i><span class="nav-text">UPT Viewer</span>
+          </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" onclick="openPage('appMasterFile', this)">📁 Master File Upload</a>
+          <a class="nav-link" onclick="openPage('appMasterFile', this)">
+            <i class="nav-icon">📁</i><span class="nav-text">Master File Upload</span>
+          </a>
         </li>
       </ul>
     </nav>
@@ -255,6 +320,15 @@
   </div>
 
   <script>
+    // FUNGSI TOGGLE SIDEBAR (MINIMIZE / EXPAND VIA KLIK LOGO)
+    function toggleSidebar() {
+      // Fitur minimize hanya aktif pada layar Desktop (> 768px)
+      if (window.innerWidth > 768) {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+      }
+    }
+
     // FUNGSI NAVIGASI PINDAH HALAMAN
     function openPage(iframeId, element) {
       document.querySelectorAll('.app-frame').forEach(frame => {
