@@ -51,11 +51,19 @@
         }
 
         .top-title-dots {
+            display: block;
+            width: 100%;
             text-align: center;
             font-weight: bold;
             margin-bottom: 10px;
             letter-spacing: 1px;
             font-size: 13px;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+            padding: 0 0 2px 0;
         }
 
         .meta-table-wrapper {
@@ -453,7 +461,7 @@
 
         <div class="left-panel" id="print-sheet">
             <div class="info-table-container">
-                <div class="top-title-dots">..................................................</div>
+                <input type="text" id="top-title-dots" class="top-title-dots" placeholder=".................................................." autocomplete="off">
                 
                 <div class="meta-table-wrapper">
                     <div class="meta-table">
@@ -1778,6 +1786,7 @@
             }
             return {
                 warna, merk, nowarna, denier,
+                topTitleDots: document.getElementById('top-title-dots').value,
                 selectBahan: document.getElementById('select-bahan').value,
                 tanggal: document.getElementById('input-tanggal').value,
                 lebarMm: document.getElementById('input-lebar-mm').value,
@@ -1795,6 +1804,7 @@
                 document.getElementById(`nowarna-${i}`).value = f.nowarna ? (f.nowarna[i-1] || '') : '';
                 document.getElementById(`denier-${i}`).value = f.denier ? (f.denier[i-1] || '') : '';
             }
+            document.getElementById('top-title-dots').value = f.topTitleDots || '';
             document.getElementById('select-bahan').value = f.selectBahan || '';
             document.getElementById('input-tanggal').value = f.tanggal || '';
             document.getElementById('input-lebar-mm').value = f.lebarMm || '';
