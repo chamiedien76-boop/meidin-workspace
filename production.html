@@ -175,6 +175,23 @@
             padding-left: 4px;
             width: 98%;
         }
+        .warna-cell-wrap {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .warna-cell-wrap .warna-input {
+            flex: 1;
+            min-width: 0;
+        }
+        .warna-swatch {
+            flex-shrink: 0;
+            display: inline-block;
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+            border: 1px solid #999;
+        }
         .prod-table tr.warna-row-hidden { display: none; }
 
         #drop-zone {
@@ -658,6 +675,70 @@
             { name: 'Oranye',    hex: '#ff8c00' }
         ];
 
+        // Kamus nama warna bahasa Indonesia -> kode warna, supaya kalau user
+        // mengetik "Merah", "Ungu", dst. bisa langsung dikenali. Nama warna
+        // bahasa Inggris atau kode hex (#rrggbb) juga otomatis dikenali lewat
+        // resolveColorRGB() di bawah, jadi kamus ini cukup untuk istilah lokal.
+        const ID_COLOR_MAP = {
+            'merah': '#ff0000', 'merah muda': '#ff69b4', 'pink': '#ff69b4',
+            'hijau': '#00dc00', 'hijau muda': '#90ee90', 'hijau tua': '#006400',
+            'kuning': '#e6be00', 'biru': '#0064ff', 'biru muda': '#00c8ff',
+            'biru tua': '#00008b', 'biru dongker': '#000080', 'dongker': '#000080',
+            'oranye': '#ff8c00', 'jingga': '#ff8c00', 'ungu': '#800080',
+            'violet': '#8a2be2', 'coklat': '#8b4513', 'cokelat': '#8b4513',
+            'hitam': '#000000', 'putih': '#ffffff', 'abu-abu': '#808080',
+            'abu abu': '#808080', 'abu2': '#808080', 'krem': '#f5deb3',
+            'emas': '#ffd700', 'perak': '#c0c0c0', 'maroon': '#800000',
+            'navy': '#000080', 'toska': '#00ced1', 'tosca': '#00ced1',
+            'magenta': '#ff00ff', 'salem': '#fa8072', 'lavender': '#e6e6fa'
+        };
+
+        function hexToRgb(hex) {
+            const clean = hex.replace('#', '');
+            const bigint = parseInt(clean, 16);
+            return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+        }
+
+        // Mencoba menerjemahkan teks yang diketik user (nama warna Indonesia,
+        // nama warna CSS/Inggris, atau kode hex) menjadi {r,g,b}.
+        // Mengembalikan null kalau teks tidak dikenali sama sekali.
+        function resolveColorRGB(text) {
+            if (!text) return null;
+            const key = text.trim().toLowerCase();
+            if (!key) return null;
+            const mapped = ID_COLOR_MAP[key];
+            const colorStr = mapped || text.trim();
+
+            const testEl = document.createElement('div');
+            testEl.style.display = 'none';
+            document.body.appendChild(testEl);
+            testEl.style.color = '';
+            testEl.style.color = colorStr;
+            const isValid = testEl.style.color !== '';
+            const computed = isValid ? getComputedStyle(testEl).color : '';
+            document.body.removeChild(testEl);
+            if (!isValid) return null;
+
+            const nums = computed.match(/[\d.]+/g);
+            if (!nums || nums.length < 3) return null;
+            return { r: Math.round(nums[0]), g: Math.round(nums[1]), b: Math.round(nums[2]) };
+        }
+
+        // Warna aktif yang benar-benar dipakai untuk menggambar preview pola.
+        // Defaultnya sama dengan THREAD_COLORS, tapi berubah kalau user
+        // mengetik nama warna lain di kolom "Warna Benang".
+        let activeThreadColors = THREAD_COLORS.map(tc => hexToRgb(tc.hex));
+
+        function updateThreadColorFromInput(i) {
+            const input = document.getElementById(`warna-${i}`);
+            const swatch = document.getElementById(`warna-swatch-${i}`);
+            if (!input) return;
+            const rgb = resolveColorRGB(input.value) || hexToRgb(THREAD_COLORS[i-1].hex);
+            activeThreadColors[i-1] = rgb;
+            if (swatch) swatch.style.backgroundColor = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
+            drawMatrixToCanvas();
+        }
+
         const tbody = document.getElementById('prod-tbody');
         for(let i=1; i<=8; i++) {
             const tr = document.createElement('tr');
@@ -667,7 +748,10 @@
             tr.innerHTML = `
                 <td><strong>${i}</strong></td>
                 <td>
-                    <input type="text" id="warna-${i}" class="warna-input" placeholder="${tc.name}" list="daftar-warna-benang" autocomplete="off">
+                    <div class="warna-cell-wrap">
+                        <input type="text" id="warna-${i}" class="warna-input" placeholder="${tc.name}" list="daftar-warna-benang" autocomplete="off">
+                        <span id="warna-swatch-${i}" class="warna-swatch" title="Pratinjau warna" style="background-color:${tc.hex};"></span>
+                    </div>
                 </td>
                 <td id="picks-${i}" style="font-weight: bold;">0</td>
                 <td><input type="text" id="merk-${i}"></td>
@@ -675,6 +759,7 @@
                 <td><input type="text" id="denier-${i}"></td>
             `;
             tbody.appendChild(tr);
+            document.getElementById(`warna-${i}`).addEventListener('input', () => updateThreadColorFromInput(i));
         }
 
         // Tampilkan/sembunyikan baris warna sesuai apakah warna itu benar-benar
@@ -693,6 +778,7 @@
 
                 if (hasPicks && warnaInput && warnaInput.value.trim() === '') {
                     warnaInput.value = THREAD_COLORS[i-1].name;
+                    updateThreadColorFromInput(i);
                 }
             }
         }
@@ -1464,15 +1550,8 @@
 
                 if (activeColorIndex !== -1) { colorCounters[activeColorIndex]++; }
 
-                let baseDotColor = {r: 110, g: 110, b: 110}; 
-                if (activeColorIndex === 0) baseDotColor = {r: 140, g: 140, b: 140}; 
-                else if (activeColorIndex === 1) baseDotColor = {r: 255, g: 0, b: 0}; 
-                else if (activeColorIndex === 2) baseDotColor = {r: 0, g: 220, b: 0}; 
-                else if (activeColorIndex === 3) baseDotColor = {r: 230, g: 190, b: 0}; 
-                else if (activeColorIndex === 4) baseDotColor = {r: 0, g: 100, b: 255}; 
-                else if (activeColorIndex === 5) baseDotColor = {r: 0, g: 200, b: 255}; 
-                else if (activeColorIndex === 6) baseDotColor = {r: 255, g: 105, b: 180};
-                else if (activeColorIndex === 7) baseDotColor = {r: 255, g: 140, b: 0}; 
+                let baseDotColor = {r: 110, g: 110, b: 110};
+                if (activeColorIndex !== -1) baseDotColor = activeThreadColors[activeColorIndex];
 
                 const rowOffset = y * currentWidth;
                 for (let x = 0; x < currentWidth; x++) {
@@ -1488,14 +1567,14 @@
                         }
 
                         if (isColorHookZone) {
-                            if (x === idxAbu) finalColor = {r: 128, g: 128, b: 128}; 
-                            else if (x === idxMerah) finalColor = {r: 255, g: 0, b: 0}; 
-                            else if (x === idxHijau) finalColor = {r: 0, g: 220, b: 0}; 
-                            else if (x === idxKun) finalColor = {r: 230, g: 190, b: 0}; 
-                            else if (x === idxBiru) finalColor = {r: 0, g: 100, b: 255}; 
-                            else if (x === idxBmud) finalColor = {r: 0, g: 200, b: 255}; 
-                            else if (x === idxPink) finalColor = {r: 255, g: 105, b: 180}; 
-                            else if (x === idxOra) finalColor = {r: 255, g: 140, b: 0}; 
+                            if (x === idxAbu) finalColor = activeThreadColors[0];
+                            else if (x === idxMerah) finalColor = activeThreadColors[1];
+                            else if (x === idxHijau) finalColor = activeThreadColors[2];
+                            else if (x === idxKun) finalColor = activeThreadColors[3];
+                            else if (x === idxBiru) finalColor = activeThreadColors[4];
+                            else if (x === idxBmud) finalColor = activeThreadColors[5];
+                            else if (x === idxPink) finalColor = activeThreadColors[6];
+                            else if (x === idxOra) finalColor = activeThreadColors[7];
                         } else { finalColor = baseDotColor; }
                     }
 
@@ -1803,6 +1882,7 @@
                 document.getElementById(`merk-${i}`).value = f.merk ? (f.merk[i-1] || '') : '';
                 document.getElementById(`nowarna-${i}`).value = f.nowarna ? (f.nowarna[i-1] || '') : '';
                 document.getElementById(`denier-${i}`).value = f.denier ? (f.denier[i-1] || '') : '';
+                updateThreadColorFromInput(i);
             }
             document.getElementById('top-title-dots').value = f.topTitleDots || '';
             document.getElementById('select-bahan').value = f.selectBahan || '';
