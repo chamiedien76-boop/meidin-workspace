@@ -468,6 +468,17 @@
                 <button class="undo-btn" id="btn-undo-ui" onclick="triggerUndo()">↩️ Undo (Ctrl+Z)</button>
                 <button class="print-btn" onclick="cetakLembarKontrol()">Cetak Lembar Kontrol</button>
                 <button class="save-btn" onclick="saveModifiedFile()">💾 Simpan File</button>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+    <!-- Tombol Ekspor -->
+    <button onclick="eksporKeGambar()" style="flex: 1; padding: 8px; background-color: #27ae60; color: white; border: none; border-radius: 3px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+        🖼️ Ekspor BMP (1:1)
+    </button>
+
+    <!-- Dropdown Otomatis (Akan Diisi Warna yang Terdeteksi) -->
+    <select id="select-warna-jarum" onclick="updateDropdownWarna()" style="flex: 1; padding: 7px; font-size: 12px; border-radius: 3px; border: 1px solid #ccc; cursor: pointer;">
+        <option value="0">0. Semua Warna</option>
+    </select>
+</div>
             </div>
             <div class="action-buttons">
                 <button class="save-btn" id="btn-save-order" style="background-color:#8e44ad;">📦 Simpan Data Order</button>
@@ -1994,6 +2005,206 @@
         const orderInput = document.getElementById('order-input');
         document.getElementById('btn-load-order').addEventListener('click', () => orderInput.click());
         orderInput.addEventListener('change', (e) => loadOrderData(e.target.files[0]));
+// Master Data 8 Warna Jarum (Lengkap & Presisi)
+const MASTER_JARUM_COLORS = {
+    "1": { name: "Jarum 1 (Abu)", rgb: [128, 128, 128], type: "gray" },
+    "2": { name: "Jarum 2 (Merah)", rgb: [255, 0, 0] },
+    "3": { name: "Jarum 3 (Hijau)", rgb: [0, 255, 0] },
+    "4": { name: "Jarum 4 (Kuning)", rgb: [255, 255, 0] },
+    "5": { name: "Jarum 5 (Biru)", rgb: [0, 0, 255] },
+    "6": { name: "Jarum 6 (Cyan)", rgb: [0, 255, 255] },
+    "7": { name: "Jarum 7 (Pink)", rgb: [255, 105, 180] },
+    "8": { name: "Jarum 8 (Coklat)", rgb: [255, 128, 0] }
+};
+
+// Fungsi Pemindai Warna Otomatis (Mendukung hingga 8 Warna Tanpa Meleset)
+function updateDropdownWarna() {
+    const canvas = document.querySelector('canvas');
+    const selectElem = document.getElementById('select-warna-jarum');
+    if (!canvas || !selectElem) return;
+
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const detectedKeys = new Set();
+
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        if (r < 30 && g < 30 && b < 30) continue; // Abaikan background hitam
+
+        let closestKey = null;
+        let minDistance = Infinity;
+
+        // Cari warna master yang paling mendekati piksel ini
+        for (let key in MASTER_JARUM_COLORS) {
+            const target = MASTER_JARUM_COLORS[key];
+            let dist = Infinity;
+
+            if (target.type === "gray") {
+                if (Math.abs(r - g) <= 30 && Math.abs(g - b) <= 30 && Math.abs(r - b) <= 30 && r > 30 && r < 220) {
+                    dist = Math.abs(r - 128);
+                }
+            } else {
+                dist = Math.sqrt(
+                    Math.pow(r - target.rgb[0], 2) +
+                    Math.pow(g - target.rgb[1], 2) +
+                    Math.pow(b - target.rgb[2], 2)
+                );
+            }
+
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestKey = key;
+            }
+        }
+
+        // Jika jaraknya masih dalam batas toleransi warna yang valid
+        if (closestKey && minDistance < 110) {
+            detectedKeys.add(closestKey);
+        }
+    }
+
+    const currentValue = selectElem.value;
+    selectElem.innerHTML = '<option value="0">0. Semua Warna</option>';
+
+    // Urutkan kunci berdasarkan nomor jarum (1 sampai 8)
+    const sortedKeys = Array.from(detectedKeys).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedKeys.forEach(key => {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = `${key}. ${MASTER_JARUM_COLORS[key].name}`;
+        selectElem.appendChild(opt);
+    });
+
+    selectElem.value = currentValue;
+}
+
+// Fungsi Ekspor Gambar BMP 1:1 Sesuai Pilihan Dropdown
+function eksporKeGambar() {
+    const originalCanvas = document.querySelector('canvas'); 
+    if (!originalCanvas) {
+        alert("Canvas pola tidak ditemukan!");
+        return;
+    }
+
+    const selectElem = document.getElementById('select-warna-jarum');
+    const pilihan = selectElem ? selectElem.value : "0";
+
+    const ctx = originalCanvas.getContext('2d');
+    const width = originalCanvas.width;
+    const height = originalCanvas.height;
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    const validRows = [];
+    const target = MASTER_JARUM_COLORS[pilihan];
+
+    // 1. Filtering Piksel & Pemotongan Baris Hitam (Trim Line)
+    for (let y = 0; y < height; y++) {
+        let hasColorInRow = false;
+        const rowBuffer = new Uint8Array(width * 3);
+
+        for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            let simpan = false;
+
+            if (pilihan === "0") {
+                simpan = !(r < 30 && g < 30 && b < 30);
+            } else if (target) {
+                if (target.type === "gray") {
+                    simpan = Math.abs(r - g) <= 30 && Math.abs(g - b) <= 30 && Math.abs(r - b) <= 30 && r > 30 && r < 220;
+                } else {
+                    const dist = Math.sqrt(
+                        Math.pow(r - target.rgb[0], 2) +
+                        Math.pow(g - target.rgb[1], 2) +
+                        Math.pow(b - target.rgb[2], 2)
+                    );
+                    simpan = dist < 110;
+                }
+            }
+
+            const targetIdx = x * 3;
+            if (simpan) {
+                rowBuffer[targetIdx]     = r;
+                rowBuffer[targetIdx + 1] = g;
+                rowBuffer[targetIdx + 2] = b;
+                hasColorInRow = true;
+            } else {
+                rowBuffer[targetIdx]     = 0;
+                rowBuffer[targetIdx + 1] = 0;
+                rowBuffer[targetIdx + 2] = 0;
+            }
+        }
+
+        if (hasColorInRow) {
+            validRows.push(rowBuffer);
+        }
+    }
+
+    if (validRows.length === 0) {
+        alert("Warna jarum yang dipilih tidak ditemukan pada pola!");
+        return;
+    }
+
+    const newHeight = validRows.length;
+
+    // 2. Binary BMP Encoder 1:1 (24-bit RGB)
+    const padding = (4 - (width * 3) % 4) % 4;
+    const rowSize = width * 3 + padding;
+    const fileSize = 54 + (rowSize * newHeight);
+
+    const buffer = new ArrayBuffer(fileSize);
+    const view = new DataView(buffer);
+
+    // Header BMP
+    view.setUint16(0, 0x4D42, true);
+    view.setUint32(2, fileSize, true);
+    view.setUint16(6, 0, true);
+    view.setUint16(8, 0, true);
+    view.setUint32(10, 54, true);
+
+    // DIB Header
+    view.setUint32(14, 40, true);
+    view.setInt32(18, width, true);
+    view.setInt32(22, newHeight, true);
+    view.setUint16(26, 1, true);
+    view.setUint16(28, 24, true);
+    view.setUint32(30, 0, true);
+    view.setUint32(34, rowSize * newHeight, true);
+    view.setInt32(38, 2835, true);
+    view.setInt32(42, 2835, true);
+    view.setUint32(46, 0, true);
+    view.setUint32(50, 0, true);
+
+    // Penulisan Data Piksel BGR (Bottom-up)
+    let offset = 54;
+    for (let y = newHeight - 1; y >= 0; y--) {
+        const rowData = validRows[y];
+        for (let x = 0; x < width; x++) {
+            const srcIdx = x * 3;
+            view.setUint8(offset++, rowData[srcIdx + 2]); // Blue
+            view.setUint8(offset++, rowData[srcIdx + 1]); // Green
+            view.setUint8(offset++, rowData[srcIdx]);     // Red
+        }
+        for (let p = 0; p < padding; p++) {
+            view.setUint8(offset++, 0);
+        }
+    }
+
+    // 3. Download File .BMP
+    const blob = new Blob([buffer], { type: 'image/bmp' });
+    const link = document.createElement('a');
+    const namaWarna = target ? target.name.replace(/[^a-zA-Z0-9]/g, "_") : "Semua_Warna";
+    link.download = `Pola_1to1_${namaWarna}.bmp`;
+    link.href = URL.createObjectURL(blob);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
     </script>
 </body>
 </html>
