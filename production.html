@@ -351,6 +351,18 @@
         .save-btn { background-color: #d35400; color: white; border: none; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 10px; }
         .undo-btn { background-color: #7f8c8d; color: white; border: none; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 10px; }
 
+        /* Tombol Ekspor & dropdown warna: box-sizing + padding/font disamakan persis
+           dengan .save-btn dkk. supaya tingginya konsisten dengan tombol lain. */
+        .export-btn {
+            box-sizing: border-box; background-color: #27ae60; color: white; border: none;
+            padding: 4px 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 10px;
+            flex: 1; white-space: nowrap;
+        }
+        .warna-select {
+            box-sizing: border-box; padding: 4px 6px; border-radius: 4px; border: 1px solid #ccc;
+            cursor: pointer; font-size: 10px; font-weight: bold; flex: 1;
+        }
+
         #status-detected {
             color: #e67e22;
             font-weight: bold;
@@ -468,17 +480,15 @@
                 <button class="undo-btn" id="btn-undo-ui" onclick="triggerUndo()">↩️ Undo (Ctrl+Z)</button>
                 <button class="print-btn" onclick="cetakLembarKontrol()">Cetak Lembar Kontrol</button>
                 <button class="save-btn" onclick="saveModifiedFile()">💾 Simpan File</button>
-<div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
-    <!-- Tombol Ekspor -->
-    <button onclick="eksporKeGambar()" style="flex: 1; padding: 8px; background-color: #27ae60; color: white; border: none; border-radius: 3px; font-weight: bold; cursor: pointer; white-space: nowrap;">
-        🖼️ Ekspor BMP (1:1)
-    </button>
+            </div>
+            <div class="action-buttons">
+                <!-- Tombol Ekspor -->
+                <button class="export-btn" onclick="eksporKeGambar()">🖼️ Ekspor BMP (1:1)</button>
 
-    <!-- Dropdown Otomatis (Akan Diisi Warna yang Terdeteksi) -->
-    <select id="select-warna-jarum" onclick="updateDropdownWarna()" style="flex: 1; padding: 7px; font-size: 12px; border-radius: 3px; border: 1px solid #ccc; cursor: pointer;">
-        <option value="0">0. Semua Warna</option>
-    </select>
-</div>
+                <!-- Dropdown Warna Benang (diisi otomatis dari tabel Warna Benang, tanpa jeda saat diklik) -->
+                <select id="select-warna-jarum" class="warna-select">
+                    <option value="0">0. Semua Warna</option>
+                </select>
             </div>
             <div class="action-buttons">
                 <button class="save-btn" id="btn-save-order" style="background-color:#8e44ad;">📦 Simpan Data Order</button>
@@ -748,6 +758,7 @@
             activeThreadColors[i-1] = rgb;
             if (swatch) swatch.style.backgroundColor = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
             drawMatrixToCanvas();
+            updateDropdownWarna();
         }
 
         const tbody = document.getElementById('prod-tbody');
@@ -792,6 +803,14 @@
                     updateThreadColorFromInput(i);
                 }
             }
+            updateDropdownWarna();
+        }
+
+        // Ambil nama warna baris ke-i dari tabel "Warna Benang" (fallback ke nama default kalau kosong)
+        function getRowThreadName(i) {
+            const input = document.getElementById(`warna-${i}`);
+            const val = input ? input.value.trim() : '';
+            return val || THREAD_COLORS[i-1].name;
         }
 
         const HEADER_OPTIONS_BY_WIDTH = {
@@ -2005,99 +2024,57 @@
         const orderInput = document.getElementById('order-input');
         document.getElementById('btn-load-order').addEventListener('click', () => orderInput.click());
         orderInput.addEventListener('change', (e) => loadOrderData(e.target.files[0]));
-// Master Data 8 Warna Jarum (Lengkap & Presisi)
-const MASTER_JARUM_COLORS = {
-    "1": { name: "Jarum 1 (Abu)", rgb: [128, 128, 128], type: "gray" },
-    "2": { name: "Jarum 2 (Merah)", rgb: [255, 0, 0] },
-    "3": { name: "Jarum 3 (Hijau)", rgb: [0, 255, 0] },
-    "4": { name: "Jarum 4 (Kuning)", rgb: [255, 255, 0] },
-    "5": { name: "Jarum 5 (Biru)", rgb: [0, 0, 255] },
-    "6": { name: "Jarum 6 (Cyan)", rgb: [0, 255, 255] },
-    "7": { name: "Jarum 7 (Pink)", rgb: [255, 105, 180] },
-    "8": { name: "Jarum 8 (Coklat)", rgb: [255, 128, 0] }
-};
 
-// Fungsi Pemindai Warna Otomatis (Mendukung hingga 8 Warna Tanpa Meleset)
+// Isi dropdown warna langsung dari tabel "Warna Benang" (baris yang aktif/punya pick),
+// bukan dari scan piksel canvas, supaya selalu sudah siap tanpa jeda saat mau ekspor gambar.
 function updateDropdownWarna() {
-    const canvas = document.querySelector('canvas');
     const selectElem = document.getElementById('select-warna-jarum');
-    if (!canvas || !selectElem) return;
-
-    const ctx = canvas.getContext('2d');
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    const detectedKeys = new Set();
-
-    for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2];
-        if (r < 30 && g < 30 && b < 30) continue; // Abaikan background hitam
-
-        let closestKey = null;
-        let minDistance = Infinity;
-
-        // Cari warna master yang paling mendekati piksel ini
-        for (let key in MASTER_JARUM_COLORS) {
-            const target = MASTER_JARUM_COLORS[key];
-            let dist = Infinity;
-
-            if (target.type === "gray") {
-                if (Math.abs(r - g) <= 30 && Math.abs(g - b) <= 30 && Math.abs(r - b) <= 30 && r > 30 && r < 220) {
-                    dist = Math.abs(r - 128);
-                }
-            } else {
-                dist = Math.sqrt(
-                    Math.pow(r - target.rgb[0], 2) +
-                    Math.pow(g - target.rgb[1], 2) +
-                    Math.pow(b - target.rgb[2], 2)
-                );
-            }
-
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestKey = key;
-            }
-        }
-
-        // Jika jaraknya masih dalam batas toleransi warna yang valid
-        if (closestKey && minDistance < 110) {
-            detectedKeys.add(closestKey);
-        }
-    }
+    if (!selectElem) return;
 
     const currentValue = selectElem.value;
     selectElem.innerHTML = '<option value="0">0. Semua Warna</option>';
 
-    // Urutkan kunci berdasarkan nomor jarum (1 sampai 8)
-    const sortedKeys = Array.from(detectedKeys).sort((a, b) => parseInt(a) - parseInt(b));
+    for (let i = 1; i <= 8; i++) {
+        const tr = document.getElementById(`prod-row-${i}`);
+        if (!tr || tr.classList.contains('warna-row-hidden')) continue; // hanya warna yg terpakai di pola
 
-    sortedKeys.forEach(key => {
         const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = `${key}. ${MASTER_JARUM_COLORS[key].name}`;
+        opt.value = String(i);
+        opt.textContent = `${i}. ${getRowThreadName(i)}`;
         selectElem.appendChild(opt);
-    });
+    }
 
-    selectElem.value = currentValue;
+    const stillExists = Array.from(selectElem.options).some(o => o.value === currentValue);
+    selectElem.value = stillExists ? currentValue : "0";
 }
 
-// Fungsi Ekspor Gambar BMP 1:1 Sesuai Pilihan Dropdown
+// Warna dianggap abu-abu/netral kalau ketiga channel RGB-nya berdekatan
+function isGrayColor(c) {
+    return Math.abs(c.r - c.g) <= 10 && Math.abs(c.g - c.b) <= 10 && Math.abs(c.r - c.b) <= 10;
+}
+
+// Fungsi Ekspor Gambar BMP 1:1 Sesuai Pilihan Dropdown (berdasar warna benang di tabel)
+// PENTING: selalu ambil data dari offscreenCanvas (bukan canvas tampilan/viewer-canvas),
+// karena offscreenCanvas menyimpan pola di resolusi asli (currentWidth x currentHeight)
+// dan tidak terpengaruh oleh slider zoom/skala tampilan. Dengan begitu hasil ekspor
+// selalu 1 piksel gambar = 1 titik pola, berapa pun level zoom yang sedang aktif di layar.
 function eksporKeGambar() {
-    const originalCanvas = document.querySelector('canvas'); 
-    if (!originalCanvas) {
-        alert("Canvas pola tidak ditemukan!");
+    if (!bitMatrix || bitMatrix.length === 0 || offscreenCanvas.width === 0 || offscreenCanvas.height === 0) {
+        alert("Belum ada pola yang bisa diekspor. Masukkan file UPT/JC5 terlebih dahulu!");
         return;
     }
 
     const selectElem = document.getElementById('select-warna-jarum');
     const pilihan = selectElem ? selectElem.value : "0";
+    const target = (pilihan !== "0") ? activeThreadColors[parseInt(pilihan, 10) - 1] : null;
 
-    const ctx = originalCanvas.getContext('2d');
-    const width = originalCanvas.width;
-    const height = originalCanvas.height;
-    const imgData = ctx.getImageData(0, 0, width, height);
+    const width = offscreenCanvas.width;
+    const height = offscreenCanvas.height;
+    const imgData = offscreenCtx.getImageData(0, 0, width, height);
     const data = imgData.data;
 
     const validRows = [];
-    const target = MASTER_JARUM_COLORS[pilihan];
+    const targetIsGray = target ? isGrayColor(target) : false;
 
     // 1. Filtering Piksel & Pemotongan Baris Hitam (Trim Line)
     for (let y = 0; y < height; y++) {
@@ -2115,13 +2092,13 @@ function eksporKeGambar() {
             if (pilihan === "0") {
                 simpan = !(r < 30 && g < 30 && b < 30);
             } else if (target) {
-                if (target.type === "gray") {
+                if (targetIsGray) {
                     simpan = Math.abs(r - g) <= 30 && Math.abs(g - b) <= 30 && Math.abs(r - b) <= 30 && r > 30 && r < 220;
                 } else {
                     const dist = Math.sqrt(
-                        Math.pow(r - target.rgb[0], 2) +
-                        Math.pow(g - target.rgb[1], 2) +
-                        Math.pow(b - target.rgb[2], 2)
+                        Math.pow(r - target.r, 2) +
+                        Math.pow(g - target.g, 2) +
+                        Math.pow(b - target.b, 2)
                     );
                     simpan = dist < 110;
                 }
@@ -2198,7 +2175,7 @@ function eksporKeGambar() {
     // 3. Download File .BMP
     const blob = new Blob([buffer], { type: 'image/bmp' });
     const link = document.createElement('a');
-    const namaWarna = target ? target.name.replace(/[^a-zA-Z0-9]/g, "_") : "Semua_Warna";
+    const namaWarna = (pilihan !== "0") ? getRowThreadName(parseInt(pilihan, 10)).replace(/[^a-zA-Z0-9]/g, "_") : "Semua_Warna";
     link.download = `Pola_1to1_${namaWarna}.bmp`;
     link.href = URL.createObjectURL(blob);
     document.body.appendChild(link);
