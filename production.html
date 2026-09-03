@@ -489,6 +489,12 @@
                 <select id="select-warna-jarum" class="warna-select">
                     <option value="0">0. Semua Warna</option>
                 </select>
+
+                <!-- Opsi: hapus titik yang tidak tersambung dengan warna yang sama saat ekspor BMP -->
+                <label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" id="hapus-titik-sendiri">
+                    Hapus titik sendirian</label><label style="display:flex;align-items:center;gap:5px;font-size:11px;margin-left:10px;cursor:pointer;"><input type="checkbox" id="gabung-double" checked> Gabung benang double (tiap 2 baris hapus 1) (2 warna sama=1 pick)
+                </label>
             </div>
             <div class="action-buttons">
                 <button class="save-btn" id="btn-save-order" style="background-color:#8e44ad;">📦 Simpan Data Order</button>
@@ -3406,7 +3412,210 @@ function eksporKeGambar() {
         return;
     }
 
-    const newHeight = validRows.length;
+        // Opsi hapus titik sendirian - VERSI FINAL CLUSTER >=2 + HITAM
+    function hapusTitikSendirian(rows, rowWidth) {
+        if (rows.length < 1) return rows;
+        function getColorKey(row, x) {
+            const i = x * 3;
+            return `${row[i]},${row[i+1]},${row[i+2]}`;
+        }
+        function isColored(row, x) {
+            const i = x * 3;
+            return row[i] !== 0 || row[i+1] !== 0 || row[i+2] !== 0;
+        }
+        function sameColor(rowA, xA, rowB, xB) {
+            const a = xA * 3;
+            const b = xB * 3;
+            return rowA[a] === rowB[b] && rowA[a+1] === rowB[b+1] && rowA[a+2] === rowB[b+2];
+        }
+        const searchOrder = [
+            { dy: 0, dx: -1 }, { dy: 0, dx: 1 },
+            { dy: -1, dx: 0 }, { dy: 1, dx: 0 },
+            { dy: -1, dx: -1 }, { dy: -1, dx: 1 },
+            { dy: 1, dx: -1 }, { dy: 1, dx: 1 }
+        ];
+        let currentRows = rows.map(r => new Uint8Array(r));
+
+        function buildClusters(grid) {
+            const h = grid.length;
+            const visited = Array.from({length: h}, () => Array(rowWidth).fill(false));
+            const clusters = [];
+            for (let y=0; y<h; y++) {
+                for (let x=0; x<rowWidth; x++) {
+                    if (!isColored(grid[y], x) || visited[y][x]) continue;
+                    const queue = [{y,x}];
+                    const cells = [];
+                    visited[y][x]=true;
+                    let qi=0;
+                    while (qi < queue.length) {
+                        const cur = queue[qi++];
+                        cells.push(cur);
+                        for (let dy=-1; dy<=1; dy++) {
+                            for (let dx=-1; dx<=1; dx++) {
+                                if (dy===0 && dx===0) continue;
+                                const ny=cur.y+dy, nx=cur.x+dx;
+                                if (ny>=0 && ny<h && nx>=0 && nx<rowWidth) {
+                                    if (!visited[ny][nx] && isColored(grid[ny], nx) && sameColor(grid[cur.y], cur.x, grid[ny], nx)) {
+                                        visited[ny][nx]=true;
+                                        queue.push({y:ny, x:nx});
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    clusters.push({cells, size: cells.length});
+                }
+            }
+            return {clusters};
+        }
+
+        let changed=true, iter=0;
+        while (changed && iter < 8) {
+            changed=false;
+            const {clusters} = buildClusters(currentRows);
+            const nextRows = currentRows.map(r=> new Uint8Array(r));
+            const singleClusters = clusters.filter(c=> c.size < 2);
+            for (const cl of singleClusters) {
+                const {y,x} = cl.cells[0];
+                let neighbors=[];
+                for (let p=0; p<searchOrder.length; p++) {
+                    const {dy,dx}=searchOrder[p];
+                    const ny=y+dy, nx=x+dx;
+                    if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
+                        if (isColored(currentRows[ny], nx) && !sameColor(currentRows[y], x, currentRows[ny], nx)) {
+                            const i=nx*3;
+                            neighbors.push({ key: getColorKey(currentRows[ny], nx), r: currentRows[ny][i], g: currentRows[ny][i+1], b: currentRows[ny][i+2], prio: p });
+                        }
+                    }
+                }
+                const i=x*3;
+                if (neighbors.length===0) {
+                    if (nextRows[y][i]!==0 || nextRows[y][i+1]!==0 || nextRows[y][i+2]!==0) {
+                        nextRows[y][i]=0; nextRows[y][i+1]=0; nextRows[y][i+2]=0; changed=true;
+                    }
+                } else {
+                    const freq={}; neighbors.forEach(c=> freq[c.key]=(freq[c.key]||0)+1);
+                    neighbors.sort((a,b)=> freq[b.key]!==freq[a.key] ? freq[b.key]-freq[a.key] : a.prio-b.prio);
+                    const ch=neighbors[0];
+                    if (nextRows[y][i]!==ch.r || nextRows[y][i+1]!==ch.g || nextRows[y][i+2]!==ch.b) {
+                        nextRows[y][i]=ch.r; nextRows[y][i+1]=ch.g; nextRows[y][i+2]=ch.b; changed=true;
+                    }
+                }
+            }
+            currentRows = nextRows.map(r=> new Uint8Array(r));
+            const nextRows2 = currentRows.map(r=> new Uint8Array(r));
+            for (let y=0; y<currentRows.length; y++) {
+                for (let x=0; x<rowWidth; x++) {
+                    if (isColored(currentRows[y], x)) continue;
+                    let neighbors=[];
+                    for (let p=0; p<searchOrder.length; p++) {
+                        const {dy,dx}=searchOrder[p];
+                        const ny=y+dy, nx=x+dx;
+                        if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
+                            if (isColored(currentRows[ny], nx)) {
+                                const i=nx*3;
+                                neighbors.push({ key: getColorKey(currentRows[ny], nx), r: currentRows[ny][i], g: currentRows[ny][i+1], b: currentRows[ny][i+2], prio: p });
+                            }
+                        }
+                    }
+                    if (neighbors.length < 3) continue;
+                    const freq={}; neighbors.forEach(c=> freq[c.key]=(freq[c.key]||0)+1);
+                    let maxF=0; for (let k in freq) if (freq[k]>maxF) maxF=freq[k];
+                    if (maxF < 3 && !(neighbors.length>=5 && maxF>=2)) continue;
+                    neighbors.sort((a,b)=> freq[b.key]!==freq[a.key] ? freq[b.key]-freq[a.key] : a.prio-b.prio);
+                    const chosen = neighbors[0];
+                    const i=x*3;
+                    if (nextRows2[y][i]!==chosen.r || nextRows2[y][i+1]!==chosen.g || nextRows2[y][i+2]!==chosen.b) {
+                        nextRows2[y][i]=chosen.r; nextRows2[y][i+1]=chosen.g; nextRows2[y][i+2]=chosen.b; changed=true;
+                    }
+                }
+            }
+            currentRows = nextRows2;
+            iter++;
+        }
+        return currentRows;
+    }
+
+    // Gabung benang double (tiap 2 baris hapus 1)/duplikat: kalau 2 pick berurutan warna benangnya SAMA, hitung 1 pick saja
+        function getDominantColorKey(row) {
+        const freq={};
+        for (let x=0; x<row.length; x+=3) {
+            if (row[x]!==0 || row[x+1]!==0 || row[x+2]!==0) {
+                const key = `${row[x]},${row[x+1]},${row[x+2]}`;
+                freq[key]=(freq[key]||0)+1;
+            }
+        }
+        let max=0, dom=null;
+        for (let k in freq) if (freq[k]>max) { max=freq[k]; dom=k; }
+        return dom;
+    }
+
+    function gabungBenangDouble(rows) {
+        if (rows.length < 2) return rows;
+        // MODE FINAL sesuai permintaan: tiap 2 baris hapus 1 (potong)
+        // Jadi gambar tetap ada, cuma picks jadi setengah
+        // Contoh: 0:keep, 1:hapus, 2:keep, 3:hapus...
+        const merged = [];
+        for (let i=0; i<rows.length; i+=2) {
+            merged.push(rows[i]);
+        }
+        const mergedCount = rows.length - merged.length;
+        if (mergedCount>0) console.log(`Benang double dipotong: ${rows.length} -> ${merged.length} picks (${mergedCount} baris dihapus tiap 2 baris)`);
+        return merged;
+    }
+
+    // Versi alternatif berdasarkan warna sama (jika butuh nanti)
+    function gabungBenangDoubleByWarna(rows) {
+        if (rows.length < 2) return rows;
+        const merged = [];
+        let prevDom = getDominantColorKey(rows[0]);
+        merged.push(rows[0]);
+        for (let i=1; i<rows.length; i++) {
+            const currDom = getDominantColorKey(rows[i]);
+            if (currDom && prevDom && currDom === prevDom) {
+                continue;
+            } else {
+                merged.push(rows[i]);
+                prevDom = currDom;
+            }
+        }
+        return merged;
+    }
+
+    const hapusTitikAktif = document.getElementById("hapus-titik-sendiri")?.checked === true;
+
+    let cleanedValidRows = validRows;
+
+    if (hapusTitikAktif) {
+        const cleanedRows = hapusTitikSendirian(validRows, width);
+        cleanedValidRows = cleanedRows.filter(row => {
+            for (let i = 0; i < row.length; i += 3) {
+                if (row[i] !== 0 || row[i + 1] !== 0 || row[i + 2] !== 0) return true;
+            }
+            return false;
+        });
+        if (cleanedValidRows.length === 0) {
+            alert("Setelah menghapus titik sendirian, tidak ada pola yang tersisa untuk diekspor.");
+            return;
+        }
+    }
+
+    // Gabung benang double (tiap 2 baris hapus 1): kalau ada 2 benang warna sama berurutan, hitung 1 picks saja (potong)
+    const gabungDoubleAktif = document.getElementById("gabung-double")?.checked !== false;
+    if (gabungDoubleAktif) {
+        const before = cleanedValidRows.length;
+        cleanedValidRows = gabungBenangDouble(cleanedValidRows);
+        const after = cleanedValidRows.length;
+        if (before !== after) {
+            console.log(`Double dipotong: ${before} -> ${after}`);
+            // Optional: tampilkan info di status
+            if (window.statusDetected) {
+                // jangan overwrite permanen, cuma log
+            }
+        }
+    }
+
+    const newHeight = cleanedValidRows.length;
 
     // 2. Binary BMP Encoder 1:1 (24-bit RGB)
     const padding = (4 - (width * 3) % 4) % 4;
@@ -3439,7 +3648,7 @@ function eksporKeGambar() {
     // Penulisan Data Piksel BGR (Bottom-up)
     let offset = 54;
     for (let y = newHeight - 1; y >= 0; y--) {
-        const rowData = validRows[y];
+        const rowData = cleanedValidRows[y];
         for (let x = 0; x < width; x++) {
             const srcIdx = x * 3;
             view.setUint8(offset++, rowData[srcIdx + 2]); // Blue
