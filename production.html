@@ -481,24 +481,25 @@
                 <button class="print-btn" onclick="cetakLembarKontrol()">Cetak Lembar Kontrol</button>
                 <button class="save-btn" onclick="saveModifiedFile()">💾 Simpan File</button>
             </div>
-            <div class="action-buttons">
+                        <div class="action-buttons">
                 <!-- Tombol Ekspor -->
                 <button class="export-btn" onclick="eksporKeGambar()">🖼️ Ekspor BMP</button>
-
-                <!-- Dropdown Warna Benang (diisi otomatis dari tabel Warna Benang, tanpa jeda saat diklik) -->
                 <select id="select-warna-jarum" class="warna-select">
                     <option value="0">- Semua Warna -</option>
                 </select>
-
-                <!-- Opsi: hapus titik yang tidak tersambung dengan warna yang sama saat ekspor BMP -->
                 <label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;cursor:pointer;white-space:nowrap;">
                     <input type="checkbox" id="hapus-titik-sendiri">
                     Filter
                 </label>
                 <label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;cursor:pointer;white-space:nowrap;">
                     <input type="checkbox" id="gabung-double">
-                   Deteksi Double
+                    Warna Double
                 </label>
+            </div>
+            <div class="action-buttons" style="margin-top:5px;">
+                <button class="save-btn" id="btn-insert-col" style="background-color:#2980b9;">➕ Insert Kolom</button>
+                <button class="save-btn" id="btn-delete-col" style="background-color:#c0392b;">➖ Hapus Kolom</button>
+                <span style="font-size:10px;color:#666;margin-left:5px;">SHIFT+drag pilih kolom dulu</span>
             </div>
             <div class="action-buttons">
                 <button class="save-btn" id="btn-save-order" style="background-color:#8e44ad;">📦 Simpan Data Order</button>
@@ -1813,7 +1814,10 @@ X.B(E,Y);return E}return J}())
 
 })(UTIF, pako);
 })();
-    </script>
+    
+        document.getElementById('btn-insert-col')?.addEventListener('click', insertColumnsAtSelection);
+        document.getElementById('btn-delete-col')?.addEventListener('click', deleteColumnsAtSelection);
+        </script>
 
     <script>
         const dropZone = document.getElementById('drop-zone');
@@ -3020,10 +3024,93 @@ X.B(E,Y);return E}return J}())
             reader.readAsDataURL(blob);
         }
 
+
+        // ============ FITUR INSERT / DELETE KOLOM ============
+        function getSelectionXRange(){
+            if(!selectionBox)return null;
+            const x1=Math.min(selectionBox.x1,selectionBox.x2);
+            const x2=Math.max(selectionBox.x1,selectionBox.x2);
+            if(x1<0||x2>=currentWidth)return null;
+            return {x1,x2,count:x2-x1+1};
+        }
+        async function insertColumnsAtSelection(){
+            if(!bitMatrix.length){ alert("Buka file dulu!"); return; }
+            const sel=getSelectionXRange();
+            let insertAt=0,count=1;
+            if(sel){ insertAt=sel.x1; count=sel.count; }
+            else{
+                const posStr=await customPrompt("Insert kolom di posisi X (0 - "+currentWidth+"):", String(Math.floor(currentWidth/2)));
+                if(posStr===null)return;
+                insertAt=parseInt(posStr,10);
+                if(isNaN(insertAt)||insertAt<0||insertAt>currentWidth){ alert("Posisi tidak valid"); return; }
+                const cntStr=await customPrompt("Jumlah kolom yang di-insert:", "1");
+                if(cntStr===null)return;
+                count=parseInt(cntStr,10);
+                if(isNaN(count)||count<=0){ alert("Jumlah tidak valid"); return; }
+            }
+            if(sel){
+                const cntStr=await customPrompt(`Insert ${count} kolom di X=${insertAt} ? Ganti jumlah:`, String(count));
+                if(cntStr===null)return;
+                const nc=parseInt(cntStr,10);
+                if(!isNaN(nc)&&nc>0)count=nc;
+            }
+            saveToUndoStack();
+            const newWidth=currentWidth+count;
+            const newBytesPerLine=Math.ceil(newWidth/8);
+            const newMatrix=[];
+            for(let y=0;y<currentHeight;y++){
+                const oldRow=bitMatrix[y];
+                const newRow=new Uint8Array(newWidth);
+                for(let x=0;x<insertAt;x++)newRow[x]=oldRow[x];
+                for(let x=insertAt;x<insertAt+count;x++)newRow[x]=0;
+                for(let x=insertAt;x<currentWidth;x++)newRow[x+count]=oldRow[x];
+                newMatrix.push(newRow);
+            }
+            bitMatrix=newMatrix;
+            currentWidth=newWidth;
+            currentBytesPerLine=newBytesPerLine;
+            let optExists=false; for(let o of widthSelect.options)if(parseInt(o.value)===currentWidth)optExists=true;
+            if(!optExists){ const opt=document.createElement("option"); opt.value=String(currentWidth); opt.text=currentWidth+" (custom)"; widthSelect.appendChild(opt); }
+            widthSelect.value=String(currentWidth);
+            selectionBox=null; drawMatrixToCanvas();
+            statusDetected.innerText=`Status: Insert ${count} kolom di X=${insertAt} -> Lebar ${currentWidth}`;
+            statusDetected.style.color="#2980b9";
+        }
+        async function deleteColumnsAtSelection(){
+            if(!bitMatrix.length){ alert("Buka file dulu!"); return; }
+            const sel=getSelectionXRange();
+            if(!sel){ alert("Pilih area kolom dulu pakai SHIFT + drag!"); return; }
+            const cntStr=await customPrompt(`Hapus ${sel.count} kolom dari X=${sel.x1} sampai X=${sel.x2} ? Ganti jumlah:`, String(sel.count));
+            if(cntStr===null)return;
+            let count=parseInt(cntStr,10);
+            if(isNaN(count)||count<=0){ alert("Jumlah tidak valid"); return; }
+            if(sel.x1+count>currentWidth)count=currentWidth-sel.x1;
+            if(currentWidth-count<64){ if(!confirm(`Lebar akan jadi ${currentWidth-count}. Lanjut?`))return; }
+            saveToUndoStack();
+            const newWidth=currentWidth-count;
+            const newBytesPerLine=Math.ceil(newWidth/8);
+            const newMatrix=[];
+            for(let y=0;y<currentHeight;y++){
+                const oldRow=bitMatrix[y];
+                const newRow=new Uint8Array(newWidth);
+                for(let x=0;x<sel.x1;x++)newRow[x]=oldRow[x];
+                for(let x=sel.x1+count;x<currentWidth;x++)newRow[x-count]=oldRow[x];
+                newMatrix.push(newRow);
+            }
+            bitMatrix=newMatrix;
+            currentWidth=newWidth;
+            currentBytesPerLine=newBytesPerLine;
+            let optExists=false; for(let o of widthSelect.options)if(parseInt(o.value)===currentWidth)optExists=true;
+            if(!optExists){ const opt=document.createElement("option"); opt.value=String(currentWidth); opt.text=currentWidth+" (custom)"; widthSelect.appendChild(opt); }
+            widthSelect.value=String(currentWidth);
+            selectionBox=null; drawMatrixToCanvas();
+            statusDetected.innerText=`Status: Hapus ${count} kolom di X=${sel.x1} -> Lebar ${currentWidth}`;
+            statusDetected.style.color="#c0392b";
+        }
+
         async function saveModifiedFile() {
             if (!fileData || bitMatrix.length === 0) { alert("Silakan masukkan file terlebih dahulu!"); return; }
             
-            // Hitung total panjang byte baru (Offset + jumlah baris x byte per baris)
             const requiredDataLength = currentOffset + (currentHeight * currentBytesPerLine);
             const totalRequiredLength = Math.max(fileData.length, requiredDataLength);
             
@@ -3031,6 +3118,21 @@ X.B(E,Y);return E}return J}())
             
             // Salin header asli
             newFileData.set(fileData.subarray(0, Math.min(fileData.length, currentOffset)));
+            
+            // === FIX: UPDATE HEADER WIDTH SESUAI LEBAR BARU ===
+            // UPT: width di byte 14,15 (big endian)
+            if (newFileData.length >= 16) {
+                newFileData[14] = (currentWidth >> 8) & 0xFF;
+                newFileData[15] = currentWidth & 0xFF;
+            }
+            // EP: width = data[32]+(data[33]<<8)+32
+            if (newFileData.length >= 34 && originalFileName.toLowerCase().endsWith('.ep')) {
+                const wMinus32 = currentWidth - 32;
+                newFileData[32] = wMinus32 & 0xFF;
+                newFileData[33] = (wMinus32 >> 8) & 0xFF;
+            }
+            // Update juga bytes per line di header jika ada (untuk beberapa tipe)
+            // Untuk UPT tipe 246/160, header tidak simpan bytes per line, tapi file size akan menyesuaikan
             
             let currentByteIdx = currentOffset;
             for (let y = 0; y < currentHeight; y++) {
@@ -3046,7 +3148,6 @@ X.B(E,Y);return E}return J}())
                 currentByteIdx += currentBytesPerLine;
             }
 
-            // Jika ada sisa data di belakang file asli yang melebihi matrix, salin juga
             if (fileData.length > currentByteIdx) {
                 newFileData.set(fileData.subarray(currentByteIdx), currentByteIdx);
             }
@@ -3329,233 +3430,86 @@ function eksporKeGambar() {
     }
 
         const validRows = [];
-
-    // === AUTO DETEKSI BENANG DOUBLE (RAW LEVEL) - OPSI CEKLIST ===
-    // Kalau ceklist Gabung double ON: jika ada 2 pick berurutan warna sama, hapus 1 di bagian itu saja
-    // Kalau OFF: normal tanpa hapus double
+    // === AUTO DETEKSI BENANG DOUBLE (RAW) - OPSI CEKLIST ===
     const gabungDoubleAktif = document.getElementById("gabung-double")?.checked === true;
     let workingBitMatrix = bitMatrix;
     let workingHeight = height;
     if (gabungDoubleAktif) {
-        const filtered = [];
-        let prevColorIdx = null;
-        let removed = 0;
-        for (let i=0; i<bitMatrix.length; i++) {
-            const rowBits = bitMatrix[i];
-            const cIdx = getActiveColorIndex(rowBits);
-            if (cIdx !== -1 && prevColorIdx !== null && cIdx === prevColorIdx) {
-                removed++;
-                continue;
-            }
+        const filtered=[];
+        let prevColorIdx=null, removed=0;
+        for(let i=0;i<bitMatrix.length;i++){
+            const rowBits=bitMatrix[i];
+            const cIdx=getActiveColorIndex(rowBits);
+            if(cIdx!==-1 && prevColorIdx!==null && cIdx===prevColorIdx){ removed++; continue; }
             filtered.push(rowBits);
-            if (cIdx !== -1) prevColorIdx = cIdx;
+            if(cIdx!==-1) prevColorIdx=cIdx;
         }
-        workingBitMatrix = filtered;
-        workingHeight = filtered.length;
-        if (removed>0) console.log(`Double auto: ${bitMatrix.length} -> ${workingHeight} (${removed} dobel warna sama dihapus lokal)`);
+        workingBitMatrix=filtered;
+        workingHeight=filtered.length;
+        if(removed>0) console.log(`Double auto: ${bitMatrix.length} -> ${workingHeight} (${removed} dobel)`);
     }
-
-    // 1. Baris-baris workingBitMatrix digabung jadi 1 baris gambar akhir
-    let y = 0;
-    while (y < workingHeight) {
-        const groupRows = [];
-        const usedColors = new Set();
-
-        while (y < workingHeight) {
-            const rowBits = workingBitMatrix[y];
-            const colorIdx = getActiveColorIndex(rowBits);
-
-            if (colorIdx !== -1 && usedColors.has(colorIdx)) break;
-
-            groupRows.push({ rowBits, colorIdx });
-            if (colorIdx !== -1) usedColors.add(colorIdx);
+    let y=0;
+    while(y<workingHeight){
+        const groupRows=[]; const usedColors=new Set();
+        while(y<workingHeight){
+            const rowBits=workingBitMatrix[y];
+            const colorIdx=getActiveColorIndex(rowBits);
+            if(colorIdx!==-1 && usedColors.has(colorIdx))break;
+            groupRows.push({rowBits,colorIdx});
+            if(colorIdx!==-1)usedColors.add(colorIdx);
             y++;
         }
-
-        if (groupRows.length === 0) { y++; continue; }
-
-        if (pilihanIdx !== null && !usedColors.has(pilihanIdx)) continue;
-
-        const rowBuffer = new Uint8Array(width * 3);
-        let hasColorInRow = false;
-
-        for (let x = 0; x < width; x++) {
-            const targetIdx = x * 3;
-            let showColorIdx = -1;
-
-            if (pilihanIdx !== null) {
-                for (const g of groupRows) {
-                    if (g.colorIdx === pilihanIdx && g.rowBits[x] === 1) showColorIdx = g.colorIdx;
-                }
-            } else {
-                for (const g of groupRows) {
-                    if (g.colorIdx !== -1 && g.rowBits[x] === 1) showColorIdx = g.colorIdx;
-                }
-            }
-
-            if (showColorIdx === -1) {
-                rowBuffer[targetIdx] = 0;
-                rowBuffer[targetIdx + 1] = 0;
-                rowBuffer[targetIdx + 2] = 0;
-                continue;
-            }
-
-            let finalColor = activeThreadColors[showColorIdx];
-
-            let isColorHookZone = false;
-            if (isJC5) {
-                if (x >= 0 && x <= 7) isColorHookZone = true;
-            } else {
-                if (x >= idxOra && x <= idxAbu) isColorHookZone = true;
-            }
-            if (isColorHookZone) {
-                const hookColorIdx = colorIdxByPos[x];
-                if (hookColorIdx !== undefined) finalColor = activeThreadColors[hookColorIdx];
-            }
-
-            rowBuffer[targetIdx]     = finalColor.r;
-            rowBuffer[targetIdx + 1] = finalColor.g;
-            rowBuffer[targetIdx + 2] = finalColor.b;
-            hasColorInRow = true;
+        if(groupRows.length===0){ y++; continue; }
+        if(pilihanIdx!==null && !usedColors.has(pilihanIdx))continue;
+        const rowBuffer=new Uint8Array(width*3);
+        let hasColorInRow=false;
+        for(let x=0;x<width;x++){
+            const targetIdx=x*3;
+            let showColorIdx=-1;
+            if(pilihanIdx!==null){ for(const g of groupRows){ if(g.colorIdx===pilihanIdx && g.rowBits[x]===1)showColorIdx=g.colorIdx; } }
+            else{ for(const g of groupRows){ if(g.colorIdx!==-1 && g.rowBits[x]===1)showColorIdx=g.colorIdx; } }
+            if(showColorIdx===-1){ rowBuffer[targetIdx]=0; rowBuffer[targetIdx+1]=0; rowBuffer[targetIdx+2]=0; continue; }
+            let finalColor=activeThreadColors[showColorIdx];
+            let isColorHookZone=false;
+            if(isJC5){ if(x>=0&&x<=7)isColorHookZone=true; } else{ if(x>=idxOra&&x<=idxAbu)isColorHookZone=true; }
+            if(isColorHookZone){ const hookColorIdx=colorIdxByPos[x]; if(hookColorIdx!==undefined)finalColor=activeThreadColors[hookColorIdx]; }
+            rowBuffer[targetIdx]=finalColor.r; rowBuffer[targetIdx+1]=finalColor.g; rowBuffer[targetIdx+2]=finalColor.b;
+            hasColorInRow=true;
         }
-
-        if (hasColorInRow) {
-            validRows.push(rowBuffer);
-        }
+        if(hasColorInRow)validRows.push(rowBuffer);
     }
-
-    if (validRows.length === 0) {
-        alert("Warna jarum yang dipilih tidak ditemukan pada pola!");
-        return;
-    }
+    if(validRows.length===0){ alert("Warna jarum yang dipilih tidak ditemukan pada pola!"); return; }
 
         // Opsi hapus titik sendirian - FINAL: H/V aman (horizontal/vertikal jangan hapus), diagonal hapus
     function hapusTitikSendirian(rows, rowWidth) {
         if (rows.length < 1) return rows;
-        function getColorKey(row, x) {
-            const i = x * 3;
-            return `${row[i]},${row[i+1]},${row[i+2]}`;
+        function getColorKey(row, x) { const i=x*3; return `${row[i]},${row[i+1]},${row[i+2]}`; }
+        function isColored(row, x) { const i=x*3; return row[i]!==0 || row[i+1]!==0 || row[i+2]!==0; }
+        function sameColor(rowA, xA, rowB, xB) { const a=xA*3,b=xB*3; return rowA[a]===rowB[b] && rowA[a+1]===rowB[b+1] && rowA[a+2]===rowB[b+2]; }
+        const fourDir=[{dy:0,dx:-1},{dy:0,dx:1},{dy:-1,dx:0},{dy:1,dx:0}];
+        const searchOrder=[{dy:0,dx:-1},{dy:0,dx:1},{dy:-1,dx:0},{dy:1,dx:0},{dy:-1,dx:-1},{dy:-1,dx:1},{dy:1,dx:-1},{dy:1,dx:1}];
+        let currentRows=rows.map(r=>new Uint8Array(r));
+        function buildClusters4Dir(grid){
+            const h=grid.length; const visited=Array.from({length:h},()=>Array(rowWidth).fill(false)); const clusters=[];
+            for(let y=0;y<h;y++){ for(let x=0;x<rowWidth;x++){ if(!isColored(grid[y],x)||visited[y][x])continue; const queue=[{y,x}]; const cells=[]; visited[y][x]=true; let qi=0; while(qi<queue.length){ const cur=queue[qi++]; cells.push(cur); for(const d of fourDir){ const ny=cur.y+d.dy,nx=cur.x+d.dx; if(ny>=0&&ny<h&&nx>=0&&nx<rowWidth){ if(!visited[ny][nx]&&isColored(grid[ny],nx)&&sameColor(grid[cur.y],cur.x,grid[ny],nx)){ visited[ny][nx]=true; queue.push({y:ny,x:nx}); } } } } clusters.push({cells,size:cells.length}); } } return {clusters};
         }
-        function isColored(row, x) {
-            const i = x * 3;
-            return row[i] !== 0 || row[i+1] !== 0 || row[i+2] !== 0;
-        }
-        function sameColor(rowA, xA, rowB, xB) {
-            const a = xA * 3;
-            const b = xB * 3;
-            return rowA[a] === rowB[b] && rowA[a+1] === rowB[b+1] && rowA[a+2] === rowB[b+2];
-        }
-        const fourDir = [
-            { dy: 0, dx: -1 }, { dy: 0, dx: 1 },
-            { dy: -1, dx: 0 }, { dy: 1, dx: 0 }
-        ];
-        const searchOrder = [
-            { dy: 0, dx: -1 }, { dy: 0, dx: 1 },
-            { dy: -1, dx: 0 }, { dy: 1, dx: 0 },
-            { dy: -1, dx: -1 }, { dy: -1, dx: 1 },
-            { dy: 1, dx: -1 }, { dy: 1, dx: 1 }
-        ];
-        let currentRows = rows.map(r => new Uint8Array(r));
-        function buildClusters4Dir(grid) {
-            const h = grid.length;
-            const visited = Array.from({length: h}, () => Array(rowWidth).fill(false));
-            const clusters = [];
-            for (let y=0; y<h; y++) {
-                for (let x=0; x<rowWidth; x++) {
-                    if (!isColored(grid[y], x) || visited[y][x]) continue;
-                    const queue = [{y,x}];
-                    const cells = [];
-                    visited[y][x]=true;
-                    let qi=0;
-                    while (qi < queue.length) {
-                        const cur = queue[qi++];
-                        cells.push(cur);
-                        for (const d of fourDir) {
-                            const ny=cur.y+d.dy, nx=cur.x+d.dx;
-                            if (ny>=0 && ny<h && nx>=0 && nx<rowWidth) {
-                                if (!visited[ny][nx] && isColored(grid[ny], nx) && sameColor(grid[cur.y], cur.x, grid[ny], nx)) {
-                                    visited[ny][nx]=true;
-                                    queue.push({y:ny, x:nx});
-                                }
-                            }
-                        }
-                    }
-                    clusters.push({cells, size: cells.length});
-                }
-            }
-            return {clusters};
-        }
-        let changed=true, iter=0;
-        while (changed && iter < 8) {
+        let changed=true,iter=0;
+        while(changed&&iter<8){
             changed=false;
-            const {clusters} = buildClusters4Dir(currentRows);
-            const nextRows = currentRows.map(r=> new Uint8Array(r));
-            const singleClusters = clusters.filter(c=> c.size < 2);
-            for (const cl of singleClusters) {
-                const {y,x} = cl.cells[0];
-                let hasHVSame=false;
-                for (const d of fourDir) {
-                    const ny=y+d.dy, nx=x+d.dx;
-                    if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
-                        if (isColored(currentRows[ny], nx) && sameColor(currentRows[y], x, currentRows[ny], nx)) { hasHVSame=true; break; }
-                    }
-                }
-                if (hasHVSame) continue;
-                let neighbors=[];
-                for (let p=0; p<searchOrder.length; p++) {
-                    const {dy,dx}=searchOrder[p];
-                    const ny=y+dy, nx=x+dx;
-                    if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
-                        if (isColored(currentRows[ny], nx) && !sameColor(currentRows[y], x, currentRows[ny], nx)) {
-                            const i=nx*3;
-                            neighbors.push({ key: getColorKey(currentRows[ny], nx), r: currentRows[ny][i], g: currentRows[ny][i+1], b: currentRows[ny][i+2], prio: p });
-                        }
-                    }
-                }
-                const i=x*3;
-                if (neighbors.length===0) {
-                    if (nextRows[y][i]!==0 || nextRows[y][i+1]!==0 || nextRows[y][i+2]!==0) {
-                        nextRows[y][i]=0; nextRows[y][i+1]=0; nextRows[y][i+2]=0; changed=true;
-                    }
-                } else {
-                    const freq={}; neighbors.forEach(c=> freq[c.key]=(freq[c.key]||0)+1);
-                    neighbors.sort((a,b)=> freq[b.key]!==freq[a.key] ? freq[b.key]-freq[a.key] : a.prio-b.prio);
-                    const ch=neighbors[0];
-                    if (nextRows[y][i]!==ch.r || nextRows[y][i+1]!==ch.g || nextRows[y][i+2]!==ch.b) {
-                        nextRows[y][i]=ch.r; nextRows[y][i+1]=ch.g; nextRows[y][i+2]=ch.b; changed=true;
-                    }
-                }
+            const {clusters}=buildClusters4Dir(currentRows);
+            const nextRows=currentRows.map(r=>new Uint8Array(r));
+            const singleClusters=clusters.filter(c=>c.size<2);
+            for(const cl of singleClusters){
+                const {y,x}=cl.cells[0];
+                let hasHVSame=false; for(const d of fourDir){ const ny=y+d.dy,nx=x+d.dx; if(ny>=0&&ny<currentRows.length&&nx>=0&&nx<rowWidth){ if(isColored(currentRows[ny],nx)&&sameColor(currentRows[y],x,currentRows[ny],nx)){ hasHVSame=true; break; } } } if(hasHVSame)continue;
+                let neighbors=[]; for(let p=0;p<searchOrder.length;p++){ const {dy,dx}=searchOrder[p]; const ny=y+dy,nx=x+dx; if(ny>=0&&ny<currentRows.length&&nx>=0&&nx<rowWidth){ if(isColored(currentRows[ny],nx)&&!sameColor(currentRows[y],x,currentRows[ny],nx)){ const i=nx*3; neighbors.push({key:getColorKey(currentRows[ny],nx),r:currentRows[ny][i],g:currentRows[ny][i+1],b:currentRows[ny][i+2],prio:p}); } } } const i=x*3;
+                if(neighbors.length===0){ if(nextRows[y][i]!==0||nextRows[y][i+1]!==0||nextRows[y][i+2]!==0){ nextRows[y][i]=0; nextRows[y][i+1]=0; nextRows[y][i+2]=0; changed=true; } }
+                else{ const freq={}; neighbors.forEach(c=>freq[c.key]=(freq[c.key]||0)+1); neighbors.sort((a,b)=>freq[b.key]!==freq[a.key]?freq[b.key]-freq[a.key]:a.prio-b.prio); const ch=neighbors[0]; if(nextRows[y][i]!==ch.r||nextRows[y][i+1]!==ch.g||nextRows[y][i+2]!==ch.b){ nextRows[y][i]=ch.r; nextRows[y][i+1]=ch.g; nextRows[y][i+2]=ch.b; changed=true; } }
             }
-            currentRows = nextRows.map(r=> new Uint8Array(r));
-            const nextRows2 = currentRows.map(r=> new Uint8Array(r));
-            for (let y=0; y<currentRows.length; y++) {
-                for (let x=0; x<rowWidth; x++) {
-                    if (isColored(currentRows[y], x)) continue;
-                    let neighbors=[];
-                    for (let p=0; p<searchOrder.length; p++) {
-                        const {dy,dx}=searchOrder[p];
-                        const ny=y+dy, nx=x+dx;
-                        if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
-                            if (isColored(currentRows[ny], nx)) {
-                                const i=nx*3;
-                                neighbors.push({ key: getColorKey(currentRows[ny], nx), r: currentRows[ny][i], g: currentRows[ny][i+1], b: currentRows[ny][i+2], prio: p });
-                            }
-                        }
-                    }
-                    if (neighbors.length < 3) continue;
-                    const freq={}; neighbors.forEach(c=> freq[c.key]=(freq[c.key]||0)+1);
-                    let maxF=0; for (let k in freq) if (freq[k]>maxF) maxF=freq[k];
-                    if (maxF < 3 && !(neighbors.length>=5 && maxF>=2)) continue;
-                    neighbors.sort((a,b)=> freq[b.key]!==freq[a.key] ? freq[b.key]-freq[a.key] : a.prio-b.prio);
-                    const chosen = neighbors[0];
-                    const i=x*3;
-                    if (nextRows2[y][i]!==chosen.r || nextRows2[y][i+1]!==chosen.g || nextRows2[y][i+2]!==chosen.b) {
-                        nextRows2[y][i]=chosen.r; nextRows2[y][i+1]=chosen.g; nextRows2[y][i+2]=chosen.b; changed=true;
-                    }
-                }
-            }
-            currentRows = nextRows2;
-            iter++;
+            currentRows=nextRows.map(r=>new Uint8Array(r));
+            const nextRows2=currentRows.map(r=>new Uint8Array(r));
+            for(let y=0;y<currentRows.length;y++){ for(let x=0;x<rowWidth;x++){ if(isColored(currentRows[y],x))continue; let neighbors=[]; for(let p=0;p<searchOrder.length;p++){ const {dy,dx}=searchOrder[p]; const ny=y+dy,nx=x+dx; if(ny>=0&&ny<currentRows.length&&nx>=0&&nx<rowWidth){ if(isColored(currentRows[ny],nx)){ const i=nx*3; neighbors.push({key:getColorKey(currentRows[ny],nx),r:currentRows[ny][i],g:currentRows[ny][i+1],b:currentRows[ny][i+2],prio:p}); } } } if(neighbors.length<3)continue; const freq={}; neighbors.forEach(c=>freq[c.key]=(freq[c.key]||0)+1); let maxF=0; for(let k in freq)if(freq[k]>maxF)maxF=freq[k]; if(maxF<3&&!(neighbors.length>=5&&maxF>=2))continue; neighbors.sort((a,b)=>freq[b.key]!==freq[a.key]?freq[b.key]-freq[a.key]:a.prio-b.prio); const chosen=neighbors[0]; const i=x*3; if(nextRows2[y][i]!==chosen.r||nextRows2[y][i+1]!==chosen.g||nextRows2[y][i+2]!==chosen.b){ nextRows2[y][i]=chosen.r; nextRows2[y][i+1]=chosen.g; nextRows2[y][i+2]=chosen.b; changed=true; } } }
+            currentRows=nextRows2; iter++;
         }
         return currentRows;
     }
@@ -3563,21 +3517,11 @@ function eksporKeGambar() {
     const hapusTitikAktif = document.getElementById("hapus-titik-sendiri")?.checked === true;
 
     let cleanedValidRows = validRows;
-
     if (hapusTitikAktif) {
         const cleanedRows = hapusTitikSendirian(validRows, width);
-        cleanedValidRows = cleanedRows.filter(row => {
-            for (let i = 0; i < row.length; i += 3) {
-                if (row[i] !== 0 || row[i + 1] !== 0 || row[i + 2] !== 0) return true;
-            }
-            return false;
-        });
-        if (cleanedValidRows.length === 0) {
-            alert("Setelah menghapus titik sendirian, tidak ada pola yang tersisa untuk diekspor.");
-            return;
-        }
+        cleanedValidRows = cleanedRows.filter(row => { for(let i=0;i<row.length;i+=3){ if(row[i]!==0||row[i+1]!==0||row[i+2]!==0)return true; } return false; });
+        if (cleanedValidRows.length===0){ alert("Setelah menghapus titik sendirian, tidak ada pola yang tersisa untuk diekspor."); return; }
     }
-
     const newHeight = cleanedValidRows.length;
 
     // 2. Binary BMP Encoder 1:1 (24-bit RGB)
@@ -3636,6 +3580,9 @@ function eksporKeGambar() {
     link.click();
     document.body.removeChild(link);
 }
-    </script>
+    
+        document.getElementById('btn-insert-col')?.addEventListener('click', insertColumnsAtSelection);
+        document.getElementById('btn-delete-col')?.addEventListener('click', deleteColumnsAtSelection);
+        </script>
 </body>
 </html>
