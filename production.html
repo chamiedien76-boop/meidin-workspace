@@ -493,7 +493,11 @@
                 <!-- Opsi: hapus titik yang tidak tersambung dengan warna yang sama saat ekspor BMP -->
                 <label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;cursor:pointer;white-space:nowrap;">
                     <input type="checkbox" id="hapus-titik-sendiri">
-                    Filter</label><label style="display:flex;align-items:center;gap:5px;font-size:11px;margin-left:10px;cursor:pointer;"><input type="checkbox" id="gabung-double" checked> Benang Double
+                    Filter
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" id="gabung-double">
+                   Deteksi Double
                 </label>
             </div>
             <div class="action-buttons">
@@ -3324,26 +3328,43 @@ function eksporKeGambar() {
         return -1;
     }
 
-    const validRows = [];
+        const validRows = [];
 
-    // 1. Baris-baris bitMatrix berurutan digabung jadi 1 baris gambar akhir SELAMA warnanya
-    //    belum pernah muncul di grup yang sedang dikumpulkan. Begitu warna yang sama muncul
-    //    lagi, berarti itu sudah pick pertama untuk baris visual BERIKUTNYA -> grup ditutup.
-    //    Ini berlaku umum untuk berapa pun jumlah warna yang ditumpuk di satu baris visual
-    //    (2 warna, 3 warna, dst) - bukan cuma pasangan tetap 2 baris.
-    //    Warna yang datang belakangan dianggap "ditumpuk di atas" warna sebelumnya: kalau ada
-    //    titik yang aktif di lebih dari satu baris pada posisi x yang sama, pick yang lebih
-    //    baru (belakangan) yang tampil.
+    // === AUTO DETEKSI BENANG DOUBLE (RAW LEVEL) - OPSI CEKLIST ===
+    // Kalau ceklist Gabung double ON: jika ada 2 pick berurutan warna sama, hapus 1 di bagian itu saja
+    // Kalau OFF: normal tanpa hapus double
+    const gabungDoubleAktif = document.getElementById("gabung-double")?.checked === true;
+    let workingBitMatrix = bitMatrix;
+    let workingHeight = height;
+    if (gabungDoubleAktif) {
+        const filtered = [];
+        let prevColorIdx = null;
+        let removed = 0;
+        for (let i=0; i<bitMatrix.length; i++) {
+            const rowBits = bitMatrix[i];
+            const cIdx = getActiveColorIndex(rowBits);
+            if (cIdx !== -1 && prevColorIdx !== null && cIdx === prevColorIdx) {
+                removed++;
+                continue;
+            }
+            filtered.push(rowBits);
+            if (cIdx !== -1) prevColorIdx = cIdx;
+        }
+        workingBitMatrix = filtered;
+        workingHeight = filtered.length;
+        if (removed>0) console.log(`Double auto: ${bitMatrix.length} -> ${workingHeight} (${removed} dobel warna sama dihapus lokal)`);
+    }
+
+    // 1. Baris-baris workingBitMatrix digabung jadi 1 baris gambar akhir
     let y = 0;
-    while (y < height) {
+    while (y < workingHeight) {
         const groupRows = [];
         const usedColors = new Set();
 
-        while (y < height) {
-            const rowBits = bitMatrix[y];
+        while (y < workingHeight) {
+            const rowBits = workingBitMatrix[y];
             const colorIdx = getActiveColorIndex(rowBits);
 
-            // Warna ini sudah pernah dipakai di grup saat ini -> baris ini milik grup berikutnya
             if (colorIdx !== -1 && usedColors.has(colorIdx)) break;
 
             groupRows.push({ rowBits, colorIdx });
@@ -3351,9 +3372,8 @@ function eksporKeGambar() {
             y++;
         }
 
-        if (groupRows.length === 0) { y++; continue; } // pengaman, seharusnya tidak pernah terjadi
+        if (groupRows.length === 0) { y++; continue; }
 
-        // Kalau user memilih 1 warna tertentu, grup yang sama sekali tidak mengandung warna itu dilewati
         if (pilihanIdx !== null && !usedColors.has(pilihanIdx)) continue;
 
         const rowBuffer = new Uint8Array(width * 3);
@@ -3364,12 +3384,10 @@ function eksporKeGambar() {
             let showColorIdx = -1;
 
             if (pilihanIdx !== null) {
-                // Hanya titik milik warna yang dipilih yang ditampilkan
                 for (const g of groupRows) {
                     if (g.colorIdx === pilihanIdx && g.rowBits[x] === 1) showColorIdx = g.colorIdx;
                 }
             } else {
-                // Semua warna: tumpuk berurutan - pick belakangan menimpa pick sebelumnya
                 for (const g of groupRows) {
                     if (g.colorIdx !== -1 && g.rowBits[x] === 1) showColorIdx = g.colorIdx;
                 }
@@ -3384,7 +3402,6 @@ function eksporKeGambar() {
 
             let finalColor = activeThreadColors[showColorIdx];
 
-            // Kolom legenda/hook-zone tetap ditampilkan warnanya sendiri sesuai posisinya
             let isColorHookZone = false;
             if (isJC5) {
                 if (x >= 0 && x <= 7) isColorHookZone = true;
@@ -3412,7 +3429,7 @@ function eksporKeGambar() {
         return;
     }
 
-        // Opsi hapus titik sendirian - VERSI FINAL CLUSTER >=2 + HITAM
+        // Opsi hapus titik sendirian - FINAL: H/V aman (horizontal/vertikal jangan hapus), diagonal hapus
     function hapusTitikSendirian(rows, rowWidth) {
         if (rows.length < 1) return rows;
         function getColorKey(row, x) {
@@ -3428,6 +3445,10 @@ function eksporKeGambar() {
             const b = xB * 3;
             return rowA[a] === rowB[b] && rowA[a+1] === rowB[b+1] && rowA[a+2] === rowB[b+2];
         }
+        const fourDir = [
+            { dy: 0, dx: -1 }, { dy: 0, dx: 1 },
+            { dy: -1, dx: 0 }, { dy: 1, dx: 0 }
+        ];
         const searchOrder = [
             { dy: 0, dx: -1 }, { dy: 0, dx: 1 },
             { dy: -1, dx: 0 }, { dy: 1, dx: 0 },
@@ -3435,8 +3456,7 @@ function eksporKeGambar() {
             { dy: 1, dx: -1 }, { dy: 1, dx: 1 }
         ];
         let currentRows = rows.map(r => new Uint8Array(r));
-
-        function buildClusters(grid) {
+        function buildClusters4Dir(grid) {
             const h = grid.length;
             const visited = Array.from({length: h}, () => Array(rowWidth).fill(false));
             const clusters = [];
@@ -3450,15 +3470,12 @@ function eksporKeGambar() {
                     while (qi < queue.length) {
                         const cur = queue[qi++];
                         cells.push(cur);
-                        for (let dy=-1; dy<=1; dy++) {
-                            for (let dx=-1; dx<=1; dx++) {
-                                if (dy===0 && dx===0) continue;
-                                const ny=cur.y+dy, nx=cur.x+dx;
-                                if (ny>=0 && ny<h && nx>=0 && nx<rowWidth) {
-                                    if (!visited[ny][nx] && isColored(grid[ny], nx) && sameColor(grid[cur.y], cur.x, grid[ny], nx)) {
-                                        visited[ny][nx]=true;
-                                        queue.push({y:ny, x:nx});
-                                    }
+                        for (const d of fourDir) {
+                            const ny=cur.y+d.dy, nx=cur.x+d.dx;
+                            if (ny>=0 && ny<h && nx>=0 && nx<rowWidth) {
+                                if (!visited[ny][nx] && isColored(grid[ny], nx) && sameColor(grid[cur.y], cur.x, grid[ny], nx)) {
+                                    visited[ny][nx]=true;
+                                    queue.push({y:ny, x:nx});
                                 }
                             }
                         }
@@ -3468,15 +3485,22 @@ function eksporKeGambar() {
             }
             return {clusters};
         }
-
         let changed=true, iter=0;
         while (changed && iter < 8) {
             changed=false;
-            const {clusters} = buildClusters(currentRows);
+            const {clusters} = buildClusters4Dir(currentRows);
             const nextRows = currentRows.map(r=> new Uint8Array(r));
             const singleClusters = clusters.filter(c=> c.size < 2);
             for (const cl of singleClusters) {
                 const {y,x} = cl.cells[0];
+                let hasHVSame=false;
+                for (const d of fourDir) {
+                    const ny=y+d.dy, nx=x+d.dx;
+                    if (ny>=0 && ny<currentRows.length && nx>=0 && nx<rowWidth) {
+                        if (isColored(currentRows[ny], nx) && sameColor(currentRows[y], x, currentRows[ny], nx)) { hasHVSame=true; break; }
+                    }
+                }
+                if (hasHVSame) continue;
                 let neighbors=[];
                 for (let p=0; p<searchOrder.length; p++) {
                     const {dy,dx}=searchOrder[p];
@@ -3536,52 +3560,6 @@ function eksporKeGambar() {
         return currentRows;
     }
 
-    // Gabung benang double (tiap 2 baris hapus 1)/duplikat: kalau 2 pick berurutan warna benangnya SAMA, hitung 1 pick saja
-        function getDominantColorKey(row) {
-        const freq={};
-        for (let x=0; x<row.length; x+=3) {
-            if (row[x]!==0 || row[x+1]!==0 || row[x+2]!==0) {
-                const key = `${row[x]},${row[x+1]},${row[x+2]}`;
-                freq[key]=(freq[key]||0)+1;
-            }
-        }
-        let max=0, dom=null;
-        for (let k in freq) if (freq[k]>max) { max=freq[k]; dom=k; }
-        return dom;
-    }
-
-    function gabungBenangDouble(rows) {
-        if (rows.length < 2) return rows;
-        // MODE FINAL sesuai permintaan: tiap 2 baris hapus 1 (potong)
-        // Jadi gambar tetap ada, cuma picks jadi setengah
-        // Contoh: 0:keep, 1:hapus, 2:keep, 3:hapus...
-        const merged = [];
-        for (let i=0; i<rows.length; i+=2) {
-            merged.push(rows[i]);
-        }
-        const mergedCount = rows.length - merged.length;
-        if (mergedCount>0) console.log(`Benang double dipotong: ${rows.length} -> ${merged.length} picks (${mergedCount} baris dihapus tiap 2 baris)`);
-        return merged;
-    }
-
-    // Versi alternatif berdasarkan warna sama (jika butuh nanti)
-    function gabungBenangDoubleByWarna(rows) {
-        if (rows.length < 2) return rows;
-        const merged = [];
-        let prevDom = getDominantColorKey(rows[0]);
-        merged.push(rows[0]);
-        for (let i=1; i<rows.length; i++) {
-            const currDom = getDominantColorKey(rows[i]);
-            if (currDom && prevDom && currDom === prevDom) {
-                continue;
-            } else {
-                merged.push(rows[i]);
-                prevDom = currDom;
-            }
-        }
-        return merged;
-    }
-
     const hapusTitikAktif = document.getElementById("hapus-titik-sendiri")?.checked === true;
 
     let cleanedValidRows = validRows;
@@ -3597,21 +3575,6 @@ function eksporKeGambar() {
         if (cleanedValidRows.length === 0) {
             alert("Setelah menghapus titik sendirian, tidak ada pola yang tersisa untuk diekspor.");
             return;
-        }
-    }
-
-    // Gabung benang double (tiap 2 baris hapus 1): kalau ada 2 benang warna sama berurutan, hitung 1 picks saja (potong)
-    const gabungDoubleAktif = document.getElementById("gabung-double")?.checked !== false;
-    if (gabungDoubleAktif) {
-        const before = cleanedValidRows.length;
-        cleanedValidRows = gabungBenangDouble(cleanedValidRows);
-        const after = cleanedValidRows.length;
-        if (before !== after) {
-            console.log(`Double dipotong: ${before} -> ${after}`);
-            // Optional: tampilkan info di status
-            if (window.statusDetected) {
-                // jangan overwrite permanen, cuma log
-            }
         }
     }
 
