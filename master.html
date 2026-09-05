@@ -3,6 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <title>Master File Upload</title>
+
+<script>
+// EARLY DEFINITION - agar tombol langsung bisa diklik
+window.scannedFolders = window.scannedFolders || [];
+window.scanDFolder = window.scanDFolder || async function(isAdding){
+  console.log("[UPT] Early stub - triggering folder input");
+  const input = document.getElementById("input-folder-manual");
+  if (input) input.click();
+  else setTimeout(()=>{ if(window.scanDFolder && window.scanDFolder._full) window.scanDFolder(isAdding); }, 300);
+};
+window.clearAllDB = window.clearAllDB || function(){};
+window.removeScannedFolder = window.removeScannedFolder || function(){};
+</script>
+
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
   body { background: #ffffff; color: #333; padding: 16px; overflow-y: auto; height: 100vh; position: relative; font-size: 11px; }
@@ -94,12 +108,13 @@
 
   .loading-line { font-size: 11px; color: #888; padding: 16px; text-align: center; }
 
-  #folder-path-display { font-size:11px; background:#f4f6f9; padding:6px 10px; border-radius:4px; border:1px solid #e0e0e0; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-flex; align-items:center; margin-left:6px; font-weight:600; }
-  #db-badge { background:#eef4ff; color:#1a73e8; padding:4px 10px; border-radius:12px; font-size:10px; font-weight:700; border:1px solid #d0ddff; margin-left:4px; }
-  .btn-scan-db { background:#1a73e8 !important; color:#fff !important; border:none !important; cursor:pointer !important; padding:7px 14px !important; font-size:12px !important; font-weight:700 !important; pointer-events:auto !important; }
-  .btn-scan-db:hover { background:#0b57d0 !important; }
-  .toolbar { position:relative; z-index:1; }
-  /* Sembunyikan tombol lama yang rancu */
+  #folder-path-display { font-size:11px; background:#f4f6f9; padding:6px 10px; border-radius:4px; border:1px solid #e0e0e0; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-flex; align-items:center; font-weight:600; cursor:pointer; }
+  #db-badge { background:#eef4ff; color:#1a73e8; padding:4px 10px; border-radius:12px; font-size:10px; font-weight:700; border:1px solid #d0ddff; }
+  .btn-scan-db { background:#1a73e8 !important; color:#fff !important; border:2px solid #1a73e8 !important; cursor:pointer !important; padding:8px 16px !important; font-size:12px !important; font-weight:800 !important; pointer-events:auto !important; z-index:9999 !important; position:relative !important; }
+  #btn-add-folder { background:#00875a !important; color:#fff !important; border:2px solid #00875a !important; cursor:pointer !important; padding:8px 14px !important; font-weight:800 !important; pointer-events:auto !important; z-index:9999 !important; position:relative !important; }
+  #folder-list-container { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .folder-chip { background:#f1f5ff; border:1px solid #c2d4ff; border-radius:16px; padding:4px 10px; font-size:11px; display:inline-flex; align-items:center; gap:6px; font-weight:600; color:#1a73e8; }
+  .folder-chip .remove-folder { cursor:pointer; background:#e0eaff; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; }
   #btn-pilih-file, #btn-pilih-folder { display:none !important; }
 
 </style>
@@ -114,25 +129,23 @@
 </div>
 
 <div class="toolbar">
-  <button id="btn-scan-d" type="button" class="btn-scan-db">📁 Scan Folder Lokal</button>
-  <button id="btn-refresh" type="button">🔄 Pindai file baru</button>
-  <div id="folder-path-display">📂 Belum ada folder - contoh D:\file upt\</div>
+  <button id="btn-scan-d" type="button" class="btn-scan-db">📁 Scan Folder Utama</button>
+  <button id="btn-add-folder" type="button">➕ Tambah Folder</button>
+  <button id="btn-refresh" type="button">🔄 Refresh</button>
+  <div id="folder-path-display">📂 0 folder - klik Scan</div>
   <span id="db-badge">DB: 0 file</span>
   <button id="btn-clear-db" type="button" style="background:#fff3f3; border:1px solid #ffc9c9;">🗑️ Clear DB</button>
-
   <div class="search-box" style="margin-left:auto;">
     <span class="search-icon">🔍</span>
     <input type="text" id="search-input" placeholder="Cari nama..." />
   </div>
-
   <input type="file" id="input-file-manual" accept=".upt,.jc5,.ep,.pat" style="display:none;" />
   <input type="file" id="input-folder-manual" webkitdirectory directory multiple style="display:none;" />
-  <!-- tombol lama disembunyikan tapi tetap ada biar fungsi lama tidak error -->
-  <button class="btn-upload-file" id="btn-pilih-file" style="display:none;">📤 Upload Lokal (.upt)</button>
-  <button id="btn-pilih-folder" style="display:none;">📤 Upload Folder</button>
-  <button class="btn-dropdown" style="display:none;">Semua ▾</button>
+  <button id="btn-pilih-file" style="display:none;">Upload</button>
+  <button id="btn-pilih-folder" style="display:none;">Folder</button>
+  <button class="btn-dropdown" style="display:none;">Semua</button>
 </div>
-
+<div id="folder-list-container"></div>
 <div id="status-msg"></div>
 
 <div class="data-table-container">
@@ -958,30 +971,6 @@ async function openPreview(file) {
     return;
   }
 
-  // FIX untuk file dari Database lokal (iframe) - cek fileData/base64 yang tersimpan
-  if (file.fileData) {
-    try {
-      let bytes;
-      if (typeof file.fileData === 'string') {
-        // base64 string
-        bytes = base64ToUint8Array(file.fileData);
-      } else if (file.fileData instanceof Uint8Array) {
-        bytes = file.fileData;
-      } else if (file.fileData instanceof ArrayBuffer) {
-        bytes = new Uint8Array(file.fileData);
-      } else if (Array.isArray(file.fileData)) {
-        bytes = new Uint8Array(file.fileData);
-      } else {
-        throw new Error("Format fileData tidak dikenali");
-      }
-      displayPatternModal(file, bytes);
-      return;
-    } catch (err) {
-      modalBody.innerHTML = `<div class="loading-line">Gagal memproses file dari DB lokal: ${err.message}</div>`;
-      return;
-    }
-  }
-
   if (file.downloadUrl) {
     try {
       const res = await fetch(file.downloadUrl);
@@ -994,22 +983,17 @@ async function openPreview(file) {
     return;
   }
 
-  // Cek apakah di Electron
-  if (typeof fileBrowserAPI !== 'undefined' && fileBrowserAPI.readFileBase64) {
-    try {
-      const res = await fileBrowserAPI.readFileBase64(file.path);
-      if (!res.success) {
-        modalBody.innerHTML = `<div class="loading-line">Gagal membaca file: ${res.error}</div>`;
-        return;
-      }
-      const bytes = base64ToUint8Array(res.base64);
-      displayPatternModal(file, bytes);
-    } catch (err) {
-      modalBody.innerHTML = `<div class="loading-line">Gagal memproses file pola: ${err.message}<br><small>Tips: File ini dari scan lokal D:\\file upt\\ tapi dibuka di iframe/browser. Silakan scan ulang folder di halaman ini agar file tersimpan di database browser.</small></div>`;
-    }
-  } else {
-    // Di iframe/browser tanpa Electron dan tanpa fileData
-    modalBody.innerHTML = `<div class="loading-line" style="color:#d93025; font-weight:600;">Gagal membaca file lokal di iframe<br><br><span style="color:#333; font-weight:400;">File <b>${file.name}</b> ini dari database lokal tapi isi filenya belum tersimpan.<br><br>Solusi:<br>1. Klik <b>Clear DB</b><br>2. Klik <b>📁 Scan Folder Lokal</b> lagi di halaman ini (bukan di app utama)<br>3. File akan tersimpan lengkap dengan isinya dan bisa di-preview di iframe</span></div>`;
+  const res = await fileBrowserAPI.readFileBase64(file.path);
+  if (!res.success) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal membaca file: ${res.error}</div>`;
+    return;
+  }
+
+  try {
+    const bytes = base64ToUint8Array(res.base64);
+    displayPatternModal(file, bytes);
+  } catch (err) {
+    modalBody.innerHTML = `<div class="loading-line">Gagal memproses file pola: ${err.message}</div>`;
   }
 }
 
@@ -1109,13 +1093,76 @@ function displayPatternModal(file, bytes) {
 })();
 </script>
 <script>
-// === FITUR TAMBAHAN V3 - FIXED: 1 tombol Scan + server tetap tampil ===
-console.log("[UPT] V3 init");
+
+// === V6 MULTI-FOLDER FIXED - NO ALERT BLOCK ===
+console.log("[UPT] V6 full init");
 
 const UPT_DB_NAME = "MasterUPTDatabase";
 const UPT_STORE = "files";
-const UPT_DB_VERSION = 2;
+const UPT_DB_VERSION = 3;
 let uptDB = null;
+let scannedFolders = [];
+
+try {
+  const raw = localStorage.getItem("upt_scanned_folders_v4");
+  if (raw) scannedFolders = JSON.parse(raw);
+} catch(e){ scannedFolders = []; }
+window.scannedFolders = scannedFolders;
+
+function saveScannedFoldersToStorage() {
+  try { localStorage.setItem("upt_scanned_folders_v4", JSON.stringify(scannedFolders)); } catch(e){}
+}
+function addScannedFolder(path, count) {
+  const name = path.split(/[\\\/]/).pop() || path;
+  const existing = scannedFolders.find(f => f.path === path);
+  if (existing) { existing.count = count; existing.addedAt = Date.now(); }
+  else { scannedFolders.push({ path, name, count, addedAt: Date.now() }); }
+  saveScannedFoldersToStorage();
+  renderFolderList();
+}
+function renderFolderList() {
+  const container = document.getElementById("folder-list-container");
+  const display = document.getElementById("folder-path-display");
+  if (!container) return;
+  if (scannedFolders.length === 0) {
+    container.innerHTML = "";
+    if (display) display.textContent = "📂 0 folder - klik Scan / Tambah Folder";
+    return;
+  }
+  container.innerHTML = scannedFolders.map(f => `
+    <div class="folder-chip" title="${f.path}">📁 ${f.name} (${f.count}) <span class="remove-folder" onclick="window.removeScannedFolder('${f.path.replace(/'/g, "\'")}')">✕</span></div>
+  `).join("");
+  if (display) {
+    const total = typeof localFileList !== 'undefined' ? localFileList.length : 0;
+    display.textContent = `📂 ${scannedFolders.length} folder: ${scannedFolders.map(f=>f.name).join(", ")} | ${total} file`;
+  }
+}
+window.removeScannedFolder = async function(path) {
+  scannedFolders = scannedFolders.filter(f => f.path !== path);
+  saveScannedFoldersToStorage();
+  if (typeof localFileList !== 'undefined') {
+    localFileList = localFileList.filter(f => !f.path.startsWith(path) && !(f.folder && f.folder.startsWith(path)));
+    if (typeof renderAllFiles === 'function') renderAllFiles();
+  }
+  try {
+    if (!uptDB) await initUPTDatabase();
+    const all = await loadFromUPTDatabase();
+    const tx = uptDB.transaction(UPT_STORE, "readwrite");
+    const store = tx.objectStore(UPT_STORE);
+    all.forEach(f => { if (f.path.startsWith(path) || (f.folder && f.folder.startsWith(path))) { try { store.delete(f.path); } catch(e){} } });
+  } catch(e){}
+  renderFolderList();
+  updateDBBadge();
+};
+window.clearAllDB = async function() {
+  if (!confirm("Hapus SEMUA database lokal?")) return;
+  await clearUPTDatabase();
+  scannedFolders = [];
+  saveScannedFoldersToStorage();
+  renderFolderList();
+  if (typeof localFileList !== 'undefined') { localFileList = []; if (typeof renderAllFiles === 'function') renderAllFiles(); }
+  await updateDBBadge();
+};
 
 function initUPTDatabase() {
   return new Promise((resolve, reject) => {
@@ -1124,124 +1171,111 @@ function initUPTDatabase() {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(UPT_STORE)) {
         const store = db.createObjectStore(UPT_STORE, { keyPath: "path" });
-        store.createIndex("name", "name", { unique: false });
+        try { store.createIndex("name", "name", { unique: false }); } catch(err){}
+        try { store.createIndex("folder", "folder", { unique: false }); } catch(err){}
       }
     };
     req.onsuccess = (e) => { uptDB = e.target.result; resolve(uptDB); };
     req.onerror = (e) => reject(e);
   });
 }
-
 async function saveToUPTDatabase(files) {
   if (!uptDB) await initUPTDatabase();
-  
-  // Helper untuk baca File jadi base64
   const readFileAsBase64 = (file) => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => {
-        const arrayBuffer = reader.result;
-        const bytes = new Uint8Array(arrayBuffer);
+        const bytes = new Uint8Array(reader.result);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
         resolve(btoa(binary));
       };
-      reader.onerror = reject;
+      reader.onerror = () => resolve(null);
       reader.readAsArrayBuffer(file);
     });
   };
-
-  // Proses semua file (yang punya rawFile akan disimpan isinya)
   const filesToSave = [];
   for (const f of files) {
     try {
-      let fileData = null;
-      if (f.rawFile) {
-        try {
-          fileData = await readFileAsBase64(f.rawFile);
-        } catch(e){ console.warn("gagal baca rawFile", f.name, e); }
-      } else if (f.fileData) {
-        fileData = f.fileData; // sudah ada dari DB
-      }
-      
+      let fileData = f.fileData || null;
+      if (f.rawFile && !fileData) fileData = await readFileAsBase64(f.rawFile);
       filesToSave.push({
-        name: f.name,
-        ext: f.ext,
-        path: f.path,
-        size: f.size,
+        name: f.name, ext: f.ext, path: f.path, size: f.size,
         customer: f.customer || (typeof getCustomerName === 'function' ? getCustomerName(f.name) : 'Umum'),
         location: f.location || "Lokal",
-        fileData: fileData, // SIMPAN ISI FILE untuk iframe!
-        lastIndexed: Date.now()
+        folder: f.path ? f.path.substring(0, Math.max(f.path.lastIndexOf("/"), f.path.lastIndexOf("\\"))) : "",
+        fileData: fileData, lastIndexed: Date.now()
       });
-    } catch(err){ console.warn(err); }
+    } catch(err){}
   }
-
   return new Promise((resolve) => {
-    const tx = uptDB.transaction(UPT_STORE, "readwrite");
-    const store = tx.objectStore(UPT_STORE);
-    filesToSave.forEach(f => {
-      try { store.put(f); } catch(err){}
-    });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
+    try {
+      const tx = uptDB.transaction(UPT_STORE, "readwrite");
+      const store = tx.objectStore(UPT_STORE);
+      filesToSave.forEach(f => { try { store.put(f); } catch(e){} });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch(e){ resolve(); }
   });
 }
-
 async function loadFromUPTDatabase() {
   if (!uptDB) await initUPTDatabase();
   return new Promise((resolve) => {
-    const tx = uptDB.transaction(UPT_STORE, "readonly");
-    const req = tx.objectStore(UPT_STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => resolve([]);
+    try {
+      const tx = uptDB.transaction(UPT_STORE, "readonly");
+      const req = tx.objectStore(UPT_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    } catch(e){ resolve([]); }
   });
 }
-
 async function clearUPTDatabase() {
   if (!uptDB) await initUPTDatabase();
   return new Promise((resolve) => {
-    const tx = uptDB.transaction(UPT_STORE, "readwrite");
-    tx.objectStore(UPT_STORE).clear();
-    tx.oncomplete = () => resolve();
+    try {
+      const tx = uptDB.transaction(UPT_STORE, "readwrite");
+      tx.objectStore(UPT_STORE).clear();
+      tx.oncomplete = () => resolve();
+    } catch(e){ resolve(); }
   });
 }
-
 async function updateDBBadge() {
-  const all = await loadFromUPTDatabase();
-  const badge = document.getElementById("db-badge");
-  if (badge) badge.textContent = `DB: ${all.length} file`;
-  return all;
+  try {
+    const all = await loadFromUPTDatabase();
+    const badge = document.getElementById("db-badge");
+    if (badge) badge.textContent = `DB: ${all.length} file`;
+    return all;
+  } catch(e){ return []; }
 }
 
-// Global function - pasti bisa diklik
-window.scanDFolder = async function() {
-  console.log("[UPT] scanDFolder CLICKED");
+window.scanDFolder = async function(isAdding) {
+  window.scanDFolder._full = true;
+  console.log("[UPT] scanDFolder REAL clicked, isAdding:", isAdding);
   const folderDisplay = document.getElementById("folder-path-display");
   const statusMsgEl = document.getElementById("status-msg");
   const inputFolderManual = document.getElementById("input-folder-manual");
+  if (folderDisplay) folderDisplay.textContent = isAdding ? "⏳ Pilih folder tambahan..." : "⏳ Pilih folder utama...";
+  if (statusMsgEl) { statusMsgEl.style.display='block'; statusMsgEl.textContent = "Membuka dialog pilih folder..."; }
 
-  if (folderDisplay) folderDisplay.textContent = "⏳ Memilih folder...";
-  if (statusMsgEl) { statusMsgEl.style.display='block'; statusMsgEl.textContent = "Membuka dialog pilih folder D:\file upt\..."; }
-
-  // 1. Electron
   if (typeof fileBrowserAPI !== 'undefined' && fileBrowserAPI.selectFolder) {
     try {
       const picked = await fileBrowserAPI.selectFolder();
-      console.log("[UPT] picked", picked);
       if (picked && picked.path) {
-        if (folderDisplay) folderDisplay.textContent = `📂 ${picked.path}`;
-        await window.loadFolder(picked.path);
+        if (typeof window._origLoadFolder === 'function') {
+          await window._origLoadFolder(picked.path);
+        } else if (typeof loadFolder === 'function') {
+          await loadFolder(picked.path);
+        }
+        const cnt = typeof localFileList !== 'undefined' ? localFileList.length : 0;
+        addScannedFolder(picked.path, cnt);
         return;
       }
     } catch(e){ console.warn(e); }
   }
-
-  // 2. File System Access API
   if (window.showDirectoryPicker) {
     try {
       const dirHandle = await window.showDirectoryPicker();
-      if (folderDisplay) folderDisplay.textContent = `📂 ${dirHandle.name}`;
+      if (folderDisplay) folderDisplay.textContent = `📂 Memindai ${dirHandle.name}...`;
       if (statusMsgEl) statusMsgEl.textContent = `Memindai ${dirHandle.name}...`;
       let scanned = [];
       async function scanHandle(handle, pathArr) {
@@ -1250,15 +1284,7 @@ window.scanDFolder = async function() {
             const file = await h.getFile();
             const ext = '.' + file.name.split('.').pop().toLowerCase();
             if (['.upt','.jc5','.ep','.pat'].includes(ext)) {
-              scanned.push({
-                name: file.name,
-                ext: ext,
-                path: [...pathArr, file.name].join("/"),
-                size: file.size,
-                rawFile: file,
-                customer: typeof getCustomerName === 'function' ? getCustomerName(file.name) : 'Umum',
-                location: "Lokal | " + pathArr.join("/")
-              });
+              scanned.push({ name: file.name, ext: ext, path: [...pathArr, file.name].join("/"), size: file.size, rawFile: file, customer: typeof getCustomerName === 'function' ? getCustomerName(file.name) : 'Umum', location: "Lokal | " + pathArr.join("/") });
             }
           } else if (h.kind === "directory") {
             await scanHandle(h, [...pathArr, name]);
@@ -1273,61 +1299,59 @@ window.scanDFolder = async function() {
       await saveToUPTDatabase(newFiles);
       if (typeof renderAllFiles === 'function') renderAllFiles();
       await updateDBBadge();
-      if (statusMsgEl) statusMsgEl.textContent = `✅ ${newFiles.length} file baru dari ${dirHandle.name} | Server tetap tampil`;
+      addScannedFolder(dirHandle.name, newFiles.length);
+      if (statusMsgEl) statusMsgEl.textContent = `✅ ${newFiles.length} file baru dari ${dirHandle.name}`;
       return;
     } catch(e){ console.log("picker cancel", e); }
   }
-
-  // 3. Fallback webkitdirectory
   if (inputFolderManual) {
+    console.log("[UPT] fallback to inputFolderManual.click()");
     inputFolderManual.click();
   }
 };
+window.scanDFolder._full = true;
 
-// Wrapper loadFolder - jaga server tetap ada
 (function(){
   const orig = window.loadFolder || (typeof loadFolder !== 'undefined' ? loadFolder : null);
-  if (orig && !orig._wrapped) {
+  if (orig) {
+    window._origLoadFolder = orig;
     const wrapped = async function(folderPath) {
+      const prev = typeof localFileList !== 'undefined' ? [...localFileList] : [];
       await orig(folderPath);
-      if (typeof localFileList !== 'undefined' && localFileList.length > 0) {
-        await saveToUPTDatabase(localFileList);
-        await updateDBBadge();
+      if (prev.length > 0 && typeof localFileList !== 'undefined') {
+        const existing = new Set(prev.map(f=>f.path));
+        const newOnes = localFileList.filter(f=>!existing.has(f.path));
+        if (newOnes.length !== localFileList.length || prev.length>0) {
+          const merged = [...prev];
+          newOnes.forEach(f=>{ if (!existing.has(f.path)) merged.push(f); });
+          // if orig replaced, keep merged
+          if (merged.length > localFileList.length) localFileList = merged;
+          else {
+            // merge anyway
+            const allPaths = new Set(localFileList.map(f=>f.path));
+            prev.forEach(f=>{ if (!allPaths.has(f.path)) localFileList.push(f); });
+          }
+          if (typeof renderAllFiles === 'function') renderAllFiles();
+        }
       }
+      if (typeof localFileList !== 'undefined') { await saveToUPTDatabase(localFileList); await updateDBBadge(); }
     };
     wrapped._wrapped = true;
     window.loadFolder = wrapped;
-    // juga override global
     try { loadFolder = wrapped; } catch(e){}
   }
 })();
 
-// Init
-window.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  try { const raw = localStorage.getItem("upt_scanned_folders_v4"); if (raw) { scannedFolders = JSON.parse(raw); window.scannedFolders = scannedFolders; } } catch(e){}
   await initUPTDatabase();
-  const dbFiles = await updateDBBadge();
-  
-  const btnScanD = document.getElementById("btn-scan-d");
-  if (btnScanD) {
-    // triple attach biar pasti kepencet
-    btnScanD.onclick = window.scanDFolder;
-    btnScanD.addEventListener("click", window.scanDFolder);
-  }
+  await updateDBBadge();
+  renderFolderList();
 
-  const btnClearDB = document.getElementById("btn-clear-db");
-  if (btnClearDB) {
-    btnClearDB.addEventListener("click", async () => {
-      if (confirm("Hapus DB lokal? File server tidak terhapus.")) {
-        await clearUPTDatabase();
-        if (typeof localFileList !== 'undefined') {
-          localFileList = [];
-          if (typeof renderAllFiles === 'function') renderAllFiles();
-        }
-        await updateDBBadge();
-        document.getElementById("folder-path-display").textContent = "📂 DB dikosongkan";
-      }
-    });
-  }
+  const btnScanD = document.getElementById("btn-scan-d");
+  if (btnScanD) { btnScanD.onclick = () => window.scanDFolder(false); btnScanD.addEventListener("click", () => window.scanDFolder(false)); }
+  const btnAdd = document.getElementById("btn-add-folder");
+  if (btnAdd) { btnAdd.onclick = () => window.scanDFolder(true); btnAdd.addEventListener("click", () => window.scanDFolder(true)); }
 
   const inputFolderManual = document.getElementById("input-folder-manual");
   if (inputFolderManual) {
@@ -1337,11 +1361,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       const files = Array.from(e.target.files || []);
       const allowed = ['.upt','.jc5','.ep','.pat'];
       const patternFiles = files.filter(f => allowed.includes('.' + f.name.split('.').pop().toLowerCase())).map(f => ({
-        name: f.name,
-        ext: '.' + f.name.split('.').pop().toLowerCase(),
-        path: f.webkitRelativePath || f.name,
-        size: f.size,
-        rawFile: f,
+        name: f.name, ext: '.' + f.name.split('.').pop().toLowerCase(),
+        path: f.webkitRelativePath || f.name, size: f.size, rawFile: f,
         customer: typeof getCustomerName === 'function' ? getCustomerName(f.name) : 'Umum',
         location: 'Lokal | ' + (f.webkitRelativePath ? f.webkitRelativePath.split('/').slice(0,-1).join('/') : '')
       }));
@@ -1353,23 +1374,63 @@ window.addEventListener("DOMContentLoaded", async () => {
         if (typeof renderAllFiles === 'function') renderAllFiles();
         await saveToUPTDatabase(toAdd);
         await updateDBBadge();
+        const folderName = patternFiles[0].path.split('/')[0];
+        addScannedFolder(folderName, toAdd.length);
         const sm = document.getElementById("status-msg");
-        if (sm) { sm.style.display='block'; sm.textContent = `✅ ${toAdd.length} file lokal baru | Server tetap tampil (${typeof githubFileList !== 'undefined' ? githubFileList.length : 0} file server)`; }
+        if (sm) { sm.style.display='block'; sm.textContent = `✅ ${toAdd.length} file baru dari ${folderName} | Total ${scannedFolders.length} folder`; }
       }
       e.target.value = "";
     });
   }
 
-  // Load DB saat start tapi tetap merge dengan server
   try {
     const all = await loadFromUPTDatabase();
     if (all.length > 0 && typeof localFileList !== 'undefined' && localFileList.length === 0) {
       localFileList = all.map(f => ({ ...f, rawFile: null }));
       if (typeof renderAllFiles === 'function') renderAllFiles();
-      document.getElementById("folder-path-display").textContent = `📂 DB: ${all.length} file lokal + server`;
     }
+    renderFolderList();
   } catch(e){}
 });
+
+// Fix openPreview untuk iframe
+(function(){
+  const _orig = typeof openPreview !== 'undefined' ? openPreview : null;
+  async function openPreviewFixed(file) {
+    const modalTitle = document.getElementById("modal-title");
+    const modalBody = document.getElementById("modal-body");
+    const modalOverlay = document.getElementById("modal-overlay");
+    if (modalTitle) modalTitle.textContent = file.name;
+    if (modalBody) modalBody.innerHTML = '<div class="loading-line">Memuat file...</div>';
+    if (modalOverlay) modalOverlay.classList.add('active');
+    if (file.rawFile) { if (typeof openPreviewFromFileObject === 'function') { openPreviewFromFileObject(file.rawFile); return; } }
+    if (file.fileData) {
+      try {
+        let bytes;
+        if (typeof file.fileData === 'string') { const binStr = atob(file.fileData); bytes = new Uint8Array(binStr.length); for (let i=0;i<binStr.length;i++) bytes[i]=binStr.charCodeAt(i); }
+        else if (file.fileData instanceof Uint8Array) bytes = file.fileData;
+        else if (file.fileData instanceof ArrayBuffer) bytes = new Uint8Array(file.fileData);
+        else bytes = new Uint8Array(file.fileData);
+        if (typeof displayPatternModal === 'function') { displayPatternModal(file, bytes); return; }
+      } catch(err){ if (modalBody) modalBody.innerHTML = `<div class="loading-line">Gagal DB: ${err.message}</div>`; return; }
+    }
+    if (file.downloadUrl) {
+      try { const res = await fetch(file.downloadUrl); const buf = await res.arrayBuffer(); if (typeof displayPatternModal === 'function') { displayPatternModal(file, new Uint8Array(buf)); return; } } catch(err){ if (modalBody) modalBody.innerHTML = `<div class="loading-line">Gagal server: ${err.message}</div>`; return; }
+    }
+    if (typeof fileBrowserAPI !== 'undefined' && fileBrowserAPI.readFileBase64) {
+      try {
+        const res = await fileBrowserAPI.readFileBase64(file.path);
+        if (!res.success) { if (modalBody) modalBody.innerHTML = `<div class="loading-line">Gagal: ${res.error}</div>`; return; }
+        const binStr = atob(res.base64); const bytes = new Uint8Array(binStr.length); for (let i=0;i<binStr.length;i++) bytes[i]=binStr.charCodeAt(i);
+        if (typeof displayPatternModal === 'function') displayPatternModal(file, bytes);
+      } catch(err){ if (modalBody) modalBody.innerHTML = `<div class="loading-line">Error: ${err.message}</div>`; }
+    } else {
+      if (modalBody) modalBody.innerHTML = `<div class="loading-line">File lokal belum tersimpan lengkap. Clear DB & Scan ulang di halaman ini.</div>`;
+    }
+  }
+  try { window.openPreview = openPreviewFixed; openPreview = openPreviewFixed; } catch(e){ window.openPreview = openPreviewFixed; }
+})();
+
 </script>
 </body>
 </html>
